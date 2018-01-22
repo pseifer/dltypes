@@ -1,0 +1,4 @@
+<plugin>
+  <name>dl-types</name>
+  <classname>de.uni_koblenz.DLTypes</classname>
+</plugin>
