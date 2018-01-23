@@ -3,6 +3,7 @@ package backend
 
 import org.semanticweb.owlapi.model._
 
+
 sealed trait DLE
 
 sealed trait DLETruthy extends DLE
@@ -45,4 +46,3 @@ case class Intersection(lexpr: DLEConcept, rexpr: DLEConcept) extends DLEConcept
 case class Union(lexpr: DLEConcept, rexpr: DLEConcept) extends DLEConcept
 case class Existential(role: DLERole, expr: DLEConcept) extends DLEConcept
 case class Universal(role: DLERole, expr: DLEConcept) extends DLEConcept
-

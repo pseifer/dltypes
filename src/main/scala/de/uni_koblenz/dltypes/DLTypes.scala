@@ -16,7 +16,3 @@ class DLTypes (override val global: Global) extends Plugin {
     new Checker(global) ::
     Nil
 }
-
-
-
-

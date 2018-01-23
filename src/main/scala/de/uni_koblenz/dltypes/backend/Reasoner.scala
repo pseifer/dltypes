@@ -18,12 +18,6 @@ trait Reasoner {
 }
 
 
-class ReasonerMock(val ontology: String) extends Reasoner {
-  val f = new File(ontology)
-  def prove(stmt: DLETruthy): Boolean = true
-}
-
-
 class ReasonerHermit(val ontologyFile: File) {
   import scala.language.implicitConversions
 

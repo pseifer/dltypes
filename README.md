@@ -3,8 +3,11 @@
 
 ## Setup
 **TODO**
-A usage example (including SBT build files) can be found here (link).
-Using this plugin also requires the ```dltypes-runtime``` (link).
+- clone [dltypes-lib](https://github.com/pseifer/dltypes-lib),
+  compile and use ```sbt publishLocal```
+  to provide the library via the local Ivy repository
+- clone dltypes (this repository)
+- build and run tests with ```sbt test```
 
 ## TODO
 

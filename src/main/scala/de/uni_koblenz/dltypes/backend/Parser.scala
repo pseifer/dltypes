@@ -3,6 +3,7 @@ package backend
 
 import scala.util.parsing.combinator._
 
+
 class Parser extends RegexParsers {
   def dlexpr: Parser[DLEConcept] = union
   def union: Parser[DLEConcept] = rep1sep(inter, UNION_TOKEN) ^^ { _.reduceLeft(Union) }
