@@ -1,12 +1,21 @@
 package de.uni_koblenz.dltypes
 package components
 
+import de.uni_koblenz.dltypes.runtime.DLType
+
 import scala.tools.nsc.Global
 import scala.tools.nsc.plugins.PluginComponent
 import scala.tools.nsc.transform.{Transform, TypingTransformers}
 import scala.tools.nsc.ast.TreeDSL
 import scala.collection.mutable.{Map => MutMap, Set => MutSet, Stack => MutStack}
 
+import scala.tools.nsc.Global
+import scala.tools.nsc.Phase
+import scala.tools.nsc.plugins.Plugin
+import scala.tools.nsc.plugins.PluginComponent
+import scala.tools.nsc.transform.{ Transform, TypingTransformers }
+import scala.tools.nsc.symtab.Flags
+import scala.tools.nsc.transform.TypingTransformers
 
 object MyGlobal {
   val symbolTable: MutMap[String, MutSet[String]] =
@@ -61,7 +70,7 @@ class Collector(val global: Global)
         tree
       // Looking for the application of StringContext(<iri>).iri to List()
       case orig @ Apply(Select(Apply(obj, List(i)), m), List())
-        if m.toString == "iri" && obj.toString == "StringContext" => {
+        if m.toString == "iri" && obj.toString == "StringContext" =>
         // Deduce type from iri.
         // TODO
         val newType: String = "{:" + i.toString.filter( _ != '"' ) + "}"
@@ -69,7 +78,6 @@ class Collector(val global: Global)
         atPos(tree.pos.makeTransparent)(
           q"$orig.asInstanceOf[${newTypeName(newType)}]"
         )
-      }
       case _ =>
         super.transform(tree)
     }
