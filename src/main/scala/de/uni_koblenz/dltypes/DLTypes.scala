@@ -11,11 +11,11 @@ class DLTypes (override val global: Global) extends Plugin {
   override val description: String = "Typed integration of SPARQL queries into the Scala programming language."
 
   // Plugin that can be used to report things happening to AnalyzerPlugin callbacks.
-  new EchoAnalyzerPlugin(global, List("pluginsTyped")).addToPhase("namer")
-  new EchoAnalyzerPlugin(global, List("pluginsTyped")).addToPhase("typer")
+  //new EchoAnalyzerPlugin(global, List("pluginsTypeSigAccessor")).addToPhase("namer")
+  //new EchoAnalyzerPlugin(global, List("pluginsTyped", "pluginsPt")).addToPhase("typer")
 
   // Plugin that checks DL types in the typer phase.
-  new CheckerAnalyzerPlugin(global).add()
+  new CheckerAnalyzerPlugin(global).add(printchecks=true, debug=true)
 
   override val components: List[PluginComponent] =
     // Workaround: Collect everything that is a DL type.
