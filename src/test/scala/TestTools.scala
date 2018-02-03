@@ -61,8 +61,8 @@ object TestTools {
       case x :: xs => x match {
         case CodeEnd =>
           r match {
-            case Failure => cases += TestCase(r, "- " + c + " > " + n, code)
-            case Success => cases += TestCase(r, "+ " + c + " > " + n, code)
+            case Success => cases += TestCase(r, "(+) " + c + " > " + n, code)
+            case Failure => cases += TestCase(r, "(-) " + c + " > " + n, code)
           }
           xs
         case SomeLine(l) => parseTestCase(r, c, n, code + "\n" + l, xs)
