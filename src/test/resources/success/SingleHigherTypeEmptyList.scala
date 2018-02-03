@@ -1,1 +1,0 @@
-val wines: List[`:RedWine`] = List()

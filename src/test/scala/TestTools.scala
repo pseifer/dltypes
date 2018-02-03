@@ -8,14 +8,97 @@ import scala.reflect.internal.util.BatchSourceFile
 import scala.tools.nsc.io.VirtualDirectory
 import de.uni_koblenz.dltypes.DLTypes
 
+import scala.collection.mutable
+
 
 object CompilationError extends Exception
 
-// TODO: Clean this up.
 
 object TestTools {
   var LOGLVL = 0
   private val testsep = "\n\n--------------------------------------------------------------------------------"
+
+  // Possible results for tests.
+  sealed trait TestResult
+  object Failure extends TestResult
+  object Success extends TestResult
+
+  // Individual test case (in .md file).
+  case class TestCase(result: TestResult,
+                      name: String,
+                      code: String)
+
+  // Parse markdown-ish test cases file.
+  class TestParser() {
+    val cases = mutable.MutableList[TestCase]()
+
+    sealed trait Line
+    case class Result(result: TestResult) extends Line
+    case class Category(name: String) extends Line
+    case class TestCaseName(name: String) extends Line
+    object CodeBegin extends Line
+    object CodeEnd extends Line
+    case class SomeLine(line: String) extends Line
+
+    // Tokenize lines.
+    private def classifyLine(line: String): Line = {
+      line match {
+        case "## Failure" => Result(Failure)
+        case "## Success" => Result(Success)
+        case name if name.startsWith("# ") => Category(name.drop(2))
+        case name if name.startsWith("#### ") => TestCaseName(name.drop(5))
+        case "```scala" => CodeBegin
+        case "```" => CodeEnd
+        case s => SomeLine(s)
+      }
+    }
+
+    private def parseTestCase(r: TestResult,
+                              c: String,
+                              n: String,
+                              code: String,
+                              lines: List[Line]): List[Line] = lines match {
+      case x :: xs => x match {
+        case CodeEnd =>
+          r match {
+            case Failure => cases += TestCase(r, "- " + c + " > " + n, code)
+            case Success => cases += TestCase(r, "+ " + c + " > " + n, code)
+          }
+          xs
+        case SomeLine(l) => parseTestCase(r, c, n, code + "\n" + l, xs)
+        case _ => xs
+      }
+      case x => x
+    }
+
+    private def parseIn(r: TestResult, c: String, n: String, lines: List[Line]): Unit = lines match {
+      case Nil => Unit
+      case x :: xs => x match {
+        case Result(Failure) => parseIn(Failure, c, n, xs)
+        case Result(Success) => parseIn(Success, c, n, xs)
+        case Category(c1) => parseIn(r, c1, n, xs)
+        case TestCaseName(n1) => parseIn(r, c, n1, xs)
+        case CodeBegin =>
+          parseIn(r, c, "<nocase>", parseTestCase(r, c, n, "", xs))
+        case _ => parseIn(r, c, n, xs)
+      }
+    }
+
+    private def doParse(lines: List[Line]): Unit = {
+      parseIn(Success, "<nocategory>", "<nocase>", lines)
+    }
+
+    def parse(s: String): Unit = {
+      var source = false
+      val lines = Source
+        .fromResource(s)
+        .getLines
+        .map(classifyLine)
+        .filterNot(x => x == SomeLine(""))
+        .toList
+      doParse(lines)
+    }
+  }
 
   // The compiler settings.
   val settings = new Settings
@@ -44,6 +127,11 @@ object TestTools {
   }
 
   // Run compiler on a single test case.
+  def testCase(test: TestCase): Unit = test match {
+    case TestCase(_, name, code) =>
+      testCase(name, code)
+  }
+
   def testCase(name: String, test: String): Unit = {
     // Construct the test case.
     val sources = mkTest(test)
