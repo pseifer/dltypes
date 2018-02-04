@@ -1,46 +1,35 @@
 import org.scalatest._
 
-
 class PluginTest extends FreeSpec {
   import TestTools._
-
   LOGLVL = 2
 
-  val parser = new TestParser()
-  parser.parse("Tests.md")
-
-  parser.cases.foreach {
-    case TestCase(Success, name, code) =>
-      name in {
-        testCase(name, code)
-      }
-    case TestCase(Failure, name, code) =>
-      name in {
+  // Run all tests in "Tests.md".
+  parse("Tests.md")
+    // Optional: Filter by category (or name).
+    //.filterCategory("Single type parameter")
+    .onlyFor(Success, { (name, test) =>
+      name in testCase(test)
+    })
+    .onlyFor(Failure, { (name, test) =>
+      name in
         intercept[CompilationError.type] {
-          testCase(name, code)
+          testCase(test)
         }
-      }
+    })
+
+  // Run additional tests.
+
+  "[S] Additional Test 1" in
+    testCase("NonSuite", """
+val x: Int = 19
+""")
+
+  "[F] Additional Test 2" in {
+    intercept[CompilationError.type] {
+      testCase("NonSuite", """
+val x: Int = "nineteen"
+""")
+    }
   }
-
-  // Inline test cases (failure).
-
-//  "Compilation should fail" in {
-//    intercept[CompilationError.type] {
-//      TestTools.testCase("Test0",
-//"""
-//val a: `:RedWine` = iri"PeterMccoyChardonnay"
-//"""
-//      )
-//    }
-//  }
-
-  // Inline test cases (success).
-
-//  "Compilation should succeed" in {
-//    TestTools.testCase("Test0",
-//"""
-//val a: `:WhiteWine` = iri"PeterMccoyChardonnay"
-//"""
-//    )
-//  }
 }
