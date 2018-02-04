@@ -1,3 +1,10 @@
+**General note**: The success and failure cases only check whether
+compilation succeeds or an compilation error happens. As such, this
+test suite is suitable to quickly test whether code changes violate
+these cases in an obvious way. To fully understand if everything
+works as expected, some manual analysis of the CHECKED or DEBUG
+output is required.
+
 # Simple assignment
 Test cases that cover trivial val assignment cases,
 as well as type inference for those.
@@ -36,6 +43,7 @@ wine = iri"BancroftChardonnay"
 val wine1 = iri"PeterMccoyChardonnay"
 ```
 
+
 ## Failure
 #### Declared subtype
 ```scala
@@ -53,6 +61,7 @@ val wine: `:RedWine` = iri"PeterMccoyChardonnay"
 var wine: `:WhiteWine` = iri"PeterMccoyChardonnay"
 wine = iri"PageMillWineryCabernetSauvignon"
 ```
+
 
 
 
@@ -80,6 +89,34 @@ val wine1 = iri"PeterMccoyChardonnay"
 val wines: List[`:WhiteWine`] = List(wine1)
 ```
 
+#### One element T* constructor (not list)
+**ISSUE:** This infers DLType, which causes a compilation error
+(for now). It should of course infer :WhiteWine.
+```scala
+case class Thing[A](a: A*)
+val wine1: `:WhiteWine` = iri"PeterMccoyChardonnay"
+val awine = Thing(wine1, wine1)
+val awine2: Thing[`:Wine`] = awine
+```
+
+#### Two element T* constructor with annotated type
+Note, that this would not work in cases where :WhiteWine was not
+explicitly given. In such a case, the types of the arguments
+to List() have to be exactly the same (for now).
+```scala
+val wine1 = iri"PeterMccoyChardonnay"
+val wine2 = iri"BancroftChardonnay"
+val wines = List[`:WhiteWine`](wine1, wine2)
+val other: List[`:Wine`] = wines
+```
+
+#### Two element T* constructor same element type
+As explained in the previous test case, this works:
+```scala
+val wines = List(iri"PeterMccoyChardonnay", iri"PeterMccoyChardonnay")
+val other: List[`:Wine`] = wines
+```
+
 #### Assignment to supertype
 ```scala
 val wine1 = iri"PeterMccoyChardonnay"
@@ -93,6 +130,14 @@ val wine1 = iri"PeterMccoyChardonnay"
 val wines1: List[`:WhiteWine`] = List.fill(3)(wine1)
 ```
 
+#### Example with non List type
+```scala
+case class Thing[A](a: A, a2: A)
+val wine1: `:WhiteWine` = iri"PeterMccoyChardonnay"
+val wine2: `:WhiteWine` = iri"BancroftChardonnay"
+val thing = Thing(wine1, wine1)
+val thing2: Thing[`:Wine`] = thing
+```
 
 ## Failure
 #### Member function of that return type
@@ -108,6 +153,20 @@ val wine1 = iri"PeterMccoyChardonnay"
 val wines: List[`:RedWine`] = List(wine1)
 ```
 
+#### Two element T* constructor with annotated type
+```scala
+val wine1 = iri"PeterMccoyChardonnay"
+val wine2 = iri"BancroftChardonnay"
+val wines = List[`:RedWine`](wine1, wine2)
+val other: List[`:Wine`] = wines
+```
+
+#### Two element T* constructor same element type
+```scala
+val wines = List(iri"PeterMccoyChardonnay", iri"PeterMccoyChardonnay")
+val other: List[`:RedWine`] = wines
+```
+
 #### Assignment to subtype
 ```scala
 val wine1 = iri"PeterMccoyChardonnay"
@@ -120,3 +179,23 @@ val wines2: List[`:WhiteWine`] = wines1
 val wine1 = iri"PeterMccoyChardonnay"
 val wines1: List[`:RedWine`] = List.fill(3)(wine1)
 ```
+
+#### Example with non List type I
+```scala
+case class Thing[A](a: A, a2: A)
+val wine1: `:WhiteWine` = iri"PeterMccoyChardonnay"
+val wine2: `:WhiteWine` = iri"BancroftChardonnay"
+val thing = Thing(wine1, wine1)
+val thing2: Thing[`:RedWine`] = thing
+```
+
+#### Example with non List type II
+**IUSSUE**: This doesn't fail as it should, because of an error in type parameter checking.
+```scala
+case class Thing[A](a: A, a2: A)
+val wine1: `:WhiteWine` = iri"PeterMccoyChardonnay"
+val wine2: `:RedWine` = iri"PageMillWineryCabernetSauvignon"
+val thing = Thing[`:WhiteWine`](wine1, wine1)
+val thing2: Thing[`:Wine`] = thing
+```
+
