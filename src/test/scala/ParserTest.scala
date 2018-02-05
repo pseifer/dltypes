@@ -44,7 +44,6 @@ class ParserTest extends Parser with FlatSpecLike with Matchers {
   "The Parser" should "parse concepts" in {
     implicit val parserToTest: Parser[Concept] = CONCEPT
     parsing(":Wine") should equal(Concept(":Wine"))
-    assertFail("Wine")
   }
 
   "The Parser" should "parse nominal values" in {

@@ -19,7 +19,7 @@ class Parser extends RegexParsers {
   def role: Parser[DLERole] = ROLE | NEGATED_ROLE
 
   // Utility parser for specific concepts and roles.
-  def IRI: Parser[String] = """:[a-zA-z]+""".r ^^ { _.toString } // TODO: Actual IRI parser
+  def IRI: Parser[String] = """[:a-zA-z]+""".r ^^ { _.toString }
   def TOP: Parser[Top.type] = TOP_TOKEN ^^ { _ => Top }
   def BOTTOM: Parser[Bottom.type] = BOTTOM_TOKEN ^^ { _ => Bottom }
   def NOMINAL: Parser[Nominal] = "{" ~ IRI ~ "}" ^^ { case _ ~ s ~ _ => Nominal(s) }
