@@ -15,6 +15,86 @@ object CompilationError extends Exception
 
 
 object TestTools {
+
+  // Public API
+
+  // Run compiler on a single test case.
+  def testCase(test: TestCase): Unit = test match {
+    case TestCase(_, n, c, code) =>
+      testCase(n, code)
+  }
+
+  def testCase(name: String, test: String): Unit = {
+    // Construct the test case.
+    val sources = mkTest(test)
+
+    LOGLVL match {
+      case 0 => Unit
+      case 1 => println(testsep + "\n" + name)
+      case 2 => println(testsep + "\n" + name + "\n" + test)
+    }
+
+    // Remove potential class files from previous test cases.
+    virtualDir.clear
+
+    // Prepare the compiler.
+    // TODO: Is is strictly necessary to instantiate a new compiler
+    // TODO: for each test case? Any way to reset the compiler after error?
+    val compiler = new Global(settings, new ConsoleReporter(settings)) {
+      override protected def computeInternalPhases () {
+        super.computeInternalPhases
+        // Load all the DLTypes phases.
+        for (phase <- new DLTypes(this).components)
+          phasesSet += phase
+      }
+    }
+    val run = new compiler.Run()
+    run.compileSources(sources)
+
+    // No .class files were created -> compilation failed.
+    if (virtualDir.toList.isEmpty) throw CompilationError
+  }
+
+  // Parse test case Markdown file.
+  def parse(s: String): this.type  = {
+    cases.clear()
+    val lines = Source
+      .fromResource(s)
+      .getLines
+      .map(classifyLine)
+      .filterNot(x => x == SomeLine(""))
+      .toList
+    doParse(lines)
+    this
+  }
+
+  // Filter out single category.
+  def filterCategory(cat: String): this.type = {
+    cases = cases.filter( x => x match {
+      case TestCase(_, _, c, _) => c == cat
+    })
+    this
+  }
+
+  // Remove single category from test cases.
+  def filterNotCategory(cat: String): this.type = {
+    cases = cases.filterNot( x => x match {
+      case TestCase(_, _, c, _) => c == cat
+    })
+    this
+  }
+
+  // Apply f for all cases matching TestResult r.
+  def onlyFor(r: TestResult, f: (String, TestCase) => Unit): this.type = {
+    cases.foreach { x => x match {
+      case TestCase(`r`, name, _, _) => f(name, x)
+      case _ => Unit
+    }}
+    this
+  }
+
+  // Internal (Here be dragons)
+
   var LOGLVL = 0
   private val testsep = "\n\n--------------------------------------------------------------------------------"
 
@@ -113,78 +193,5 @@ object TestTools {
         test,
         "}")
     List(new BatchSourceFile("test", code.mkString("\n")))
-  }
-
-  // Run compiler on a single test case.
-  def testCase(test: TestCase): Unit = test match {
-    case TestCase(_, n, c, code) =>
-      testCase(n, code)
-  }
-
-  def testCase(name: String, test: String): Unit = {
-    // Construct the test case.
-    val sources = mkTest(test)
-
-    LOGLVL match {
-      case 0 => Unit
-      case 1 => println(testsep + "\n" + name)
-      case 2 => println(testsep + "\n" + name + "\n" + test)
-    }
-
-    // Remove potential class files from previous test cases.
-    virtualDir.clear
-
-    // Prepare the compiler.
-    // TODO: Is is strictly necessary to instantiate a new compiler
-    // TODO: for each test case? Any way to reset the compiler after error?
-    val compiler = new Global(settings, new ConsoleReporter(settings)) {
-      override protected def computeInternalPhases () {
-        super.computeInternalPhases
-        // Load all the DLTypes phases.
-        for (phase <- new DLTypes(this).components)
-          phasesSet += phase
-      }
-    }
-    val run = new compiler.Run()
-    run.compileSources(sources)
-
-    // No .class files were created -> compilation failed.
-    if (virtualDir.toList.isEmpty) throw CompilationError
-  }
-
-  def parse(s: String): this.type  = {
-    cases.clear()
-    val lines = Source
-      .fromResource(s)
-      .getLines
-      .map(classifyLine)
-      .filterNot(x => x == SomeLine(""))
-      .toList
-    doParse(lines)
-    this
-  }
-
-  def tests(): List[TestCase] = cases.toList
-
-  def filterCategory(cat: String): this.type = {
-    cases = cases.filter( x => x match {
-      case TestCase(_, _, c, _) => c == cat
-    })
-    this
-  }
-
-  def filterNotCategory(cat: String): this.type = {
-    cases = cases.filterNot( x => x match {
-      case TestCase(_, _, c, _) => c == cat
-    })
-    this
-  }
-
-  def onlyFor(r: TestResult, f: (String, TestCase) => Unit): this.type = {
-    cases.foreach { x => x match {
-      case TestCase(`r`, name, _, _) => f(name, x)
-      case _ => Unit
-    }}
-    this
   }
 }
