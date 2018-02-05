@@ -90,8 +90,7 @@ val wines: List[`:WhiteWine`] = List(wine1)
 ```
 
 #### One element T* constructor (not list)
-**ISSUE:** This infers DLType, which causes a compilation error
-(for now). It should of course infer :WhiteWine.
+**ISSUE:** This infers DLType, which causes compilation error (for now).
 ```scala
 case class Thing[A](a: A*)
 val wine1: `:WhiteWine` = iri"PeterMccoyChardonnay"
@@ -190,12 +189,39 @@ val thing2: Thing[`:RedWine`] = thing
 ```
 
 #### Example with non List type II
-**IUSSUE**: This doesn't fail as it should, because of an error in type parameter checking.
 ```scala
 case class Thing[A](a: A, a2: A)
 val wine1: `:WhiteWine` = iri"PeterMccoyChardonnay"
 val wine2: `:RedWine` = iri"PageMillWineryCabernetSauvignon"
-val thing = Thing[`:WhiteWine`](wine1, wine1)
+val thing = Thing[`:WhiteWine`](wine1, wine2)
 val thing2: Thing[`:Wine`] = thing
 ```
 
+
+
+
+
+# Multiple type parameter
+## Success
+#### Different types
+This should issue a "using argument matching heuristic"
+warning as well.
+```scala
+case class Thing[A, B](a: A, a2: B)
+val wine1: `:WhiteWine` = iri"PeterMccoyChardonnay"
+val wine2: `:RedWine` = iri"PageMillWineryCabernetSauvignon"
+val thing = Thing(wine1, wine2)
+val thing2: Thing[`:Wine`, `:Wine`] = thing
+```
+
+## Failure
+#### Different types
+This should issue a "using argument matching heuristic"
+warning as well.
+```scala
+case class Thing[A, B](a: A, a2: B)
+val wine1: `:WhiteWine` = iri"PeterMccoyChardonnay"
+val wine2: `:RedWine` = iri"PageMillWineryCabernetSauvignon"
+val thing = Thing(wine1, wine2)
+val thing2: Thing[`:RedWine`, `:Wine`] = thing
+```

@@ -173,9 +173,9 @@ object TestTools {
     this
   }
 
-  def filterName(name: String): this.type = {
-    cases = cases.filter( x => x match {
-      case TestCase(_, name1, _, _) => name == name1
+  def filterNotCategory(cat: String): this.type = {
+    cases = cases.filterNot( x => x match {
+      case TestCase(_, _, c, _) => c == cat
     })
     this
   }

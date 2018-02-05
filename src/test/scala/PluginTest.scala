@@ -1,13 +1,12 @@
 import org.scalatest._
 
+
 class PluginTest extends FreeSpec {
   import TestTools._
   LOGLVL = 2
 
   // Run all tests in "Tests.md".
   parse("Tests.md")
-    // Optional: Filter by category (or name).
-    //.filterCategory("Single type parameter")
     .onlyFor(Success, { (name, test) =>
       name in testCase(test)
     })
@@ -18,18 +17,18 @@ class PluginTest extends FreeSpec {
         }
     })
 
-  // Run additional tests.
+  // Define additional test cases below.
 
-  "[S] Additional Test 1" in
-    testCase("NonSuite", """
-val x: Int = 19
-""")
+//  "[S] Additional Test 1" in
+//    testCase("NonSuite", """
+//val x: Int = 19
+//""")
 
-  "[F] Additional Test 2" in {
-    intercept[CompilationError.type] {
-      testCase("NonSuite", """
-val x: Int = "nineteen"
-""")
-    }
-  }
+//  "[F] Additional Test 2" in {
+//    intercept[CompilationError.type] {
+//      testCase("NonSuite", """
+//val x: Int = "nineteen"
+//""")
+//    }
+//  }
 }
