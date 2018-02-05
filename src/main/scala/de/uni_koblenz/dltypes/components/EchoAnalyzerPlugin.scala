@@ -60,8 +60,31 @@ class EchoAnalyzerPlugin(global: Global, log: List[String]) {
       override def pluginsTyped(tpe: Type, typer: Typer, tree: Tree, mode: Mode, pt: Type): Type = {
         if (loglvl("pluginsTyped")) {
           // Test: Get the type arguments.
+          if (tpe.kind == "NullaryMethodType") {
+            tpe.resultType match {
+              case TypeRef(pre, sym, args) =>
+                reporter.echo("=> tpe")
+                reporter.echo(pre.toString)
+                reporter.echo(sym.toString)
+                reporter.echo(args.toString)
+              case _ => Unit
+            }
+
+          }
           tpe match {
-            case TypeRef(_, _, args) => reporter.echo(args.toString)
+            case TypeRef(pre, sym, args) =>
+              reporter.echo("tpe")
+              reporter.echo(pre.toString)
+              reporter.echo(sym.toString)
+              reporter.echo(args.toString)
+            case _ => Unit
+          }
+          pt match {
+            case TypeRef(pre, sym, args) =>
+              reporter.echo("pt")
+              reporter.echo(pre.toString)
+              reporter.echo(sym.toString)
+              reporter.echo(args.toString)
             case _ => Unit
           }
           reporter.echo("\n\n=== [\u001b[33mpluginsTyped\u001b[0m] ============================")
@@ -71,6 +94,12 @@ class EchoAnalyzerPlugin(global: Global, log: List[String]) {
           reporter.echo("Typed by " + typer.toString +" in mode " + mode.toString)
           reporter.echo("Tree (of class) " + treeClass(tree))
           reporter.echo("----------\n" + tree.toString + "\n---------\n")
+          //if (tpe.resultType <:< pt) {
+          //  reporter.echo(tpe.resultType + " is subtype " + pt)
+          //} else {
+          //  reporter.error(tree.pos, "wat??")
+          //  reporter.echo(tpe.resultType + " is NOT subtype " + pt)
+          //}
           reporter.flush()
         }
         tpe
@@ -135,6 +164,20 @@ class EchoAnalyzerPlugin(global: Global, log: List[String]) {
       // setters based on the type of the corresponding field.
 
       override def pluginsTypeSigAccessor(tpe: Type, typer: Typer, tree: ValDef, sym: Symbol): Type = {
+        if (loglvl("pluginsTypeSigAccessor")) {
+          // Test: Get the type arguments.
+          tpe match {
+            case TypeRef(_, _, args) => reporter.echo(args.toString)
+            case _ => Unit
+          }
+          reporter.echo("\n\n=== [\u001b[34mpluginsTypeSigAccessor\u001b[0m] ============================")
+          reporter.echo("Inferred type (tpe): " + tpe + " : " + tpe.typeSymbol.toString + " of kind " + tpe.kind)
+          reporter.echo("    of kind " + tpe.kind + " is higher kinded " + tpe.isHigherKinded)
+          reporter.echo("Symbol: " + sym.toString)
+          reporter.echo("Tree (of class) " + treeClass(tree))
+          reporter.echo("----------\n" + tree.toString + "\n---------\n")
+          reporter.flush()
+        }
         tpe
       }
 

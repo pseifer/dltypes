@@ -28,7 +28,7 @@ class Typedef(val global: Global)
         q"type ${newTypeName(x)} = DLType"
       }.toList
 
-    val dlModuleName = "DLTypes"
+    val dlModuleName = "DLTypeDefs"
 
     override def transform(tree: Tree): Tree = tree match {
       // Attach the DLTypes module to the empty (top level) package.
@@ -41,14 +41,14 @@ class Typedef(val global: Global)
         atPos(tree.pos.makeTransparent)(
           ClassDef(mods, name, tps,
             Template(impl.parents, impl.self,
-              List(impl.body.head) ++ List(q"import DLTypes._") ++ impl.body.tail))
+              List(impl.body.head) ++ List(q"import DLTypeDefs._") ++ impl.body.tail))
         )
       // ...and modules.
       case ModuleDef(mods, name, impl) =>
         atPos(tree.pos.makeTransparent)(
           ModuleDef(mods, name,
             Template(impl.parents, impl.self,
-            List(impl.body.head) ++ List(q"import DLTypes._") ++ impl.body.tail))
+            List(impl.body.head) ++ List(q"import DLTypeDefs._") ++ impl.body.tail))
         )
       case _ => super.transform(tree)
     }

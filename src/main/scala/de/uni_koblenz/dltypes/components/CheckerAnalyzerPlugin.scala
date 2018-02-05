@@ -89,12 +89,13 @@ class CheckerAnalyzerPlugin(global: Global) {
     }
 
     // Perform type check (...).
-    def typeCheck(tpe: Type, pt: Type, tree: Tree, mode: Mode): Unit = {
+    def typeCheck(tpe: Type, pt: Type, tree: Tree, mode: Mode, warnH: Boolean = false): Unit = {
       if (isDLType(tpe) && isDLType(pt)) {
         parseDL(tpe).flatMap { dltpe =>
           parseDL(pt).map { dlpt =>
             val test = Subsumed(dltpe, dlpt)
             reportCheck(test)
+            if (warnH) reporter.warning(tree.pos, "[DL] Using argument matching heuristic.")
             (reasoner.prove(test), test)
           }
         } match {
@@ -133,12 +134,12 @@ class CheckerAnalyzerPlugin(global: Global) {
         val tpeArgs = getTypeArgs(tpe)
         val ptArgs = getTypeArgs(pt)
 
-        // TODO: Fix this! Temp: Cases were DLType is inferred need to be annotated explicitly.
+        // TODO: Fix this? Temp: Cases were DLType is inferred need to be annotated explicitly.
         if (tpeArgs.map { t =>
             mode == Mode.TYPEmode && t == typeOf[DLType] && t.toString.split('.').last == "DLType"
           }.exists(identity))
           reporter.error(tree.pos, "[DL] Explicit use or inference of 'DLType' violates type safety."
-            + "\nPossible solution: Declare more specific type (or top) explicitly.")
+            + "\nPossible solution: Declare more specific type or use ⊤ explicitly.")
 
         if (tpeArgs.isEmpty && ptArgs.isEmpty)
           typeCheck(tpe, pt, tree, mode)
@@ -146,8 +147,7 @@ class CheckerAnalyzerPlugin(global: Global) {
           typeCheck(tpeArgs.head, ptArgs.head, tree, mode)
         else
           for ((tpe1, pt1) <- tpeArgs.zip(ptArgs)) {
-            reporter.warning(tree.pos, "[DL] Using argument matching heuristic.")
-            typeCheck(tpe1, pt1, tree, mode)
+            typeCheck(tpe1, pt1, tree, mode, warnH = true)
           }
         tpe
       }
