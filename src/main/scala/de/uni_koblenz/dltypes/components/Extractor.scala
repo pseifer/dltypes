@@ -76,9 +76,16 @@ trait Extractor {
 
   // Match DL type identifier against Tree and return String.
   object DLTypeSimple {
+    val h_char =
+      List("$colon", "$hash",
+        "$u22A4", "$bar",
+        "$amp", "$bang",
+        "$u2200", "$u2203",
+        "$u00AC", "$u22A5")
+    def isDLTypeHeuristic(s: String): Boolean = h_char.exists(s.contains)
+
     def unapply(tree: Tree): Option[String] = tree match {
-      case Ident(n) if n.toString.contains("$colon") =>
-        Some(n.toString)
+      case Ident(n) if isDLTypeHeuristic(n.toString) => Some(n.toString)
       case _ => None
     }
   }
