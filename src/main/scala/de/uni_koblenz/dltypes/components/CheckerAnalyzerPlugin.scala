@@ -88,8 +88,9 @@ class CheckerAnalyzerPlugin(global: Global) {
       }
     }
 
-    // Perform type check (...).
+    // Perform DL type checks.
     def typeCheck(tpe: Type, pt: Type, tree: Tree, mode: Mode, warnH: Boolean = false): Unit = {
+      // If both are DL types, do subsumed(tpe, pt) check.
       if (isDLType(tpe) && isDLType(pt)) {
         parseDL(tpe).flatMap { dltpe =>
           parseDL(pt).map { dlpt =>
@@ -109,11 +110,16 @@ class CheckerAnalyzerPlugin(global: Global) {
             }
         }
       }
-      // Todo: !dl && dl and dl && !dl cases.
+      else if (isDLType(tpe) && !isDLType(pt) && pt.isFinalType && !(pt == typeOf[Nothing]))
+        reporter.error(tree.pos, "[DL] Type Error: Incompatible DLType " + tpe + " with " + pt)
+      else if (isDLType(pt) && !isDLType(tpe) && tpe.isFinalType && !(tpe == typeOf[Nothing]))
+        reporter.error(tree.pos, "[DL] Type Error: Incompatible " + tpe + " with DLType " + pt)
     }
 
     // Get the type arguments (if any).
     def getTypeArgs(tpe: Type): List[Type] = {
+      // Variable are nullary methods, therefore we might
+      // need to look at the result type here.
       if (tpe.kind == "NullaryMethodType")
         tpe.resultType match {
           case TypeRef(_, _, args) => args
@@ -130,25 +136,31 @@ class CheckerAnalyzerPlugin(global: Global) {
       override def isActive(): Boolean = global.phase.id <= global.currentRun.typerPhase.id
 
       override def pluginsTyped(tpe: Type, typer: Typer, tree: Tree, mode: Mode, pt: Type): Type = {
-
         val tpeArgs = getTypeArgs(tpe)
         val ptArgs = getTypeArgs(pt)
 
-        // TODO: Fix this? Temp: Cases were DLType is inferred need to be annotated explicitly.
+        // Cases were DLType is inferred (or explicitly used) need to be declared
+        // explicitly with either a more specific type, or Top (⊤).
         if (tpeArgs.map { t =>
             mode == Mode.TYPEmode && t == typeOf[DLType] && t.toString.split('.').last == "DLType"
           }.exists(identity))
           reporter.error(tree.pos, "[DL] Explicit use or inference of 'DLType' violates type safety."
             + "\nPossible solution: Declare more specific type or use ⊤ explicitly.")
 
+        // No type parameters (correct).
         if (tpeArgs.isEmpty && ptArgs.isEmpty)
           typeCheck(tpe, pt, tree, mode)
+        // Exactly one (correct).
         else if (tpeArgs.size == 1 && ptArgs.size == 1)
           typeCheck(tpeArgs.head, ptArgs.head, tree, mode)
-        else
+        // More than one type parameter (might be wrong)...
+        else {
+          // ...if not the same class. Issue warning in this case.
+          val warn = if (tpe.baseClasses == pt.baseClasses) false else true
           for ((tpe1, pt1) <- tpeArgs.zip(ptArgs)) {
-            typeCheck(tpe1, pt1, tree, mode, warnH = true)
+            typeCheck(tpe1, pt1, tree, mode, warnH = warn)
           }
+        }
         tpe
       }
     }

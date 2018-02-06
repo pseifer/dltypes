@@ -19,16 +19,18 @@ class PluginTest extends FreeSpec {
 
   // Define additional test cases below.
 
-//  "[S] Additional Test 1" in
-//    testCase("NonSuite", """
-//val x: Int = 19
-//""")
+  "[S] Additional Test 1" in
+    testCase("NonSuite",
+      """
+      val x: Int = 19
+      """)
 
-//  "[F] Additional Test 2" in {
-//    intercept[CompilationError.type] {
-//      testCase("NonSuite", """
-//val x: Int = "nineteen"
-//""")
-//    }
-//  }
+  "[F] Additional Test 2" in {
+    intercept[CompilationError.type] {
+      testCase("NonSuite",
+        """
+        val x: Int = "nineteen"
+        """.stripMargin)
+    }
+  }
 }
