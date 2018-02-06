@@ -204,8 +204,6 @@ val thing2: Thing[`:Wine`] = thing
 # Multiple type parameter
 ## Success
 #### Different types
-This should issue a "using argument matching heuristic"
-warning as well.
 ```scala
 case class Thing[A, B](a: A, a2: B)
 val wine1: `:WhiteWine` = iri"PeterMccoyChardonnay"
@@ -214,10 +212,21 @@ val thing = Thing(wine1, wine2)
 val thing2: Thing[`:Wine`, `:Wine`] = thing
 ```
 
-## Failure
-#### Different types
+## Warning
+#### Different types, not the same class
 This should issue a "using argument matching heuristic"
 warning as well.
+```scala
+class Thang[A,B]
+class Thing[A,B](a: A, a2: B) extends Thang[A,B]
+val wine1: `:WhiteWine` = iri"PeterMccoyChardonnay"
+val wine2: `:RedWine` = iri"PageMillWineryCabernetSauvignon"
+val thing = new Thing(wine1, wine2)
+val thang: Thang[`:Wine`, `:Wine`] = thing
+```
+
+## Failure
+#### Different types
 ```scala
 case class Thing[A, B](a: A, a2: B)
 val wine1: `:WhiteWine` = iri"PeterMccoyChardonnay"

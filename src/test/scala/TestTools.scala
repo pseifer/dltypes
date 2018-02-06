@@ -1,3 +1,4 @@
+import java.io._
 import java.net.URLClassLoader
 
 import scala.io.Source
@@ -7,11 +8,12 @@ import scala.tools.nsc.util.ClassPath
 import scala.reflect.internal.util.BatchSourceFile
 import scala.tools.nsc.io.VirtualDirectory
 import de.uni_koblenz.dltypes.DLTypes
+import org.apache.geronimo.mail.util.StringBufferOutputStream
 
 import scala.collection.mutable.ListBuffer
 
 
-object CompilationError extends Exception
+//object CompilationError extends Exception
 
 
 object TestTools {
@@ -19,12 +21,12 @@ object TestTools {
   // Public API
 
   // Run compiler on a single test case.
-  def testCase(test: TestCase): Unit = test match {
-    case TestCase(_, n, c, code) =>
+  def testCase(test: TestCase): (Boolean, Boolean) = test match {
+    case TestCase(_, n, _, code) =>
       testCase(n, code)
   }
 
-  def testCase(name: String, test: String): Unit = {
+  def testCase(name: String, test: String): (Boolean, Boolean) = {
     // Construct the test case.
     val sources = mkTest(test)
 
@@ -34,25 +36,13 @@ object TestTools {
       case 2 => println(testsep + "\n" + name + "\n" + test)
     }
 
-    // Remove potential class files from previous test cases.
-    virtualDir.clear
+    // Reset the reporter.
+    reporter.reset()
 
-    // Prepare the compiler.
-    // TODO: Is is strictly necessary to instantiate a new compiler
-    // TODO: for each test case? Any way to reset the compiler after error?
-    val compiler = new Global(settings, new ConsoleReporter(settings)) {
-      override protected def computeInternalPhases () {
-        super.computeInternalPhases
-        // Load all the DLTypes phases.
-        for (phase <- new DLTypes(this).components)
-          phasesSet += phase
-      }
-    }
     val run = new compiler.Run()
     run.compileSources(sources)
 
-    // No .class files were created -> compilation failed.
-    if (virtualDir.toList.isEmpty) throw CompilationError
+    (reporter.hasErrors, reporter.hasWarnings)
   }
 
   // Parse test case Markdown file.
@@ -84,6 +74,10 @@ object TestTools {
     this
   }
 
+  def warning(t: (Boolean, Boolean)): Boolean = t._2 == true
+  def error(t: (Boolean, Boolean)): Boolean = t._1 == true
+  def success(t: (Boolean, Boolean)): Boolean = t._1 == false
+
   // Apply f for all cases matching TestResult r.
   def onlyFor(r: TestResult, f: (String, TestCase) => Unit): this.type = {
     cases.foreach { x => x match {
@@ -105,6 +99,7 @@ object TestTools {
   sealed trait TestResult
   object Failure extends TestResult
   object Success extends TestResult
+  object Warning extends TestResult
 
   // Individual test case (in .md file).
   case class TestCase(result: TestResult,
@@ -126,6 +121,7 @@ object TestTools {
     line match {
       case "## Failure" => Result(Failure)
       case "## Success" => Result(Success)
+      case "## Warning" => Result(Warning)
       case name if name.startsWith("# ") => Category(name.drop(2))
       case name if name.startsWith("#### ") => TestCaseName(name.drop(5))
       case "```scala" => CodeBegin
@@ -144,6 +140,7 @@ object TestTools {
         r match {
           case Success => cases += TestCase(r, "[S] " + c + " > " + n, c, code)
           case Failure => cases += TestCase(r, "[F] " + c + " > " + n, c, code)
+          case Warning => cases += TestCase(r, "[W] " + c + " > " + n, c, code)
         }
         xs
       case SomeLine(l) => parseTestCase(r, c, n, code + "\n" + l, xs)
@@ -157,6 +154,7 @@ object TestTools {
     case x :: xs => x match {
       case Result(Failure) => parseIn(Failure, c, n, xs)
       case Result(Success) => parseIn(Success, c, n, xs)
+      case Result(Warning) => parseIn(Warning, c, n, xs)
       case Category(c1) => parseIn(r, c1, n, xs)
       case TestCaseName(n1) => parseIn(r, c, n1, xs)
       case CodeBegin =>
@@ -171,6 +169,18 @@ object TestTools {
 
   // The compiler settings.
   private val settings = new Settings
+  // settings.processArgumentString("")
+
+  val reporter = new ConsoleReporter(settings)
+
+  val compiler = new Global(settings, reporter) {
+    override protected def computeInternalPhases () {
+      super.computeInternalPhases
+      // Load all the DLTypes phases.
+      for (phase <- new DLTypes(this).components)
+        phasesSet += phase
+    }
+  }
 
   // Add "scala-compiler.jar" and "scala-library.jar" to class path.
   // This is required for SBT.

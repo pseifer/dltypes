@@ -7,30 +7,14 @@ class PluginTest extends FreeSpec {
 
   // Run all tests in "Tests.md".
   parse("Tests.md")
+    //.filterCategory("Multiple type parameter")
     .onlyFor(Success, { (name, test) =>
-      name in testCase(test)
+      name in assert(success(testCase(test)))
+    })
+    .onlyFor(Warning, { (name, test) =>
+      name in assert(warning(testCase(test)))
     })
     .onlyFor(Failure, { (name, test) =>
-      name in
-        intercept[CompilationError.type] {
-          testCase(test)
-        }
+      name in assert(error(testCase(test)))
     })
-
-  // Define additional test cases below.
-
-  "[S] Additional Test 1" in
-    testCase("NonSuite",
-      """
-      val x: Int = 19
-      """)
-
-  "[F] Additional Test 2" in {
-    intercept[CompilationError.type] {
-      testCase("NonSuite",
-        """
-        val x: Int = "nineteen"
-        """.stripMargin)
-    }
-  }
 }
