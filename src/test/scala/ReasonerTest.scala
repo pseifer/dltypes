@@ -1,4 +1,5 @@
 import de.uni_koblenz.dltypes.backend._
+import de.uni_koblenz.dltypes.tools._
 
 import org.scalatest._
 import java.io.File

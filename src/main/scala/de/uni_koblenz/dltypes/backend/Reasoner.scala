@@ -11,6 +11,8 @@ import java.io.File
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 
+import de.uni_koblenz.dltypes.tools._
+
 
 trait Reasoner {
   val f: File

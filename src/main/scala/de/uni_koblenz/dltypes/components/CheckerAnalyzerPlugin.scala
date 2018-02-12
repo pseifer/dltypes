@@ -5,7 +5,8 @@ import scala.tools.nsc.Mode
 import scala.util.{Failure => UtilFailure, Success => UtilSuccess, Try => UtilTry}
 import java.io.File
 
-import de.uni_koblenz.dltypes.backend._
+import de.uni_koblenz.dltypes.backend.ReasonerHermit
+import de.uni_koblenz.dltypes.tools._
 import de.uni_koblenz.dltypes.runtime.DLType
 
 
@@ -13,8 +14,11 @@ class CheckerAnalyzerPlugin(global: Global) {
   import global._
   import analyzer._
 
+  // TODO: Separate TypeChecker & ErrorReporter classes
+  // This should only contain the definition of the actual plugin.
+
   // warnings: Emit (compiler) warnings on non-critical failures.
-  // checks: Print +++CHECKING+++<...> messages for all DL type checks.
+  // printchecks: Print +++CHECKING+++<...> messages for all DL type checks.
   // debug: Print additional debug information on type errors and warnings.
   def add(warnings: Boolean = true,
           printchecks: Boolean = false,
@@ -29,9 +33,14 @@ class CheckerAnalyzerPlugin(global: Global) {
     val blueOn = "\u001b[34m"
     val colorOff = "\u001b[0m"
 
-    // Get ontology (temporary hard coded) and instantiate reasoner.
-    val fi = new File(getClass.getResource("/wine.rdf").getFile)
-    val reasoner = new ReasonerHermit(fi)
+    // Lazy, since MyGlobal.ontologies is set by DLTypes.init (after
+    // CheckerAnalyzerPlugin is initialized.
+    lazy val fi = new File(MyGlobal.ontologies.head) // This...
+    // ... is in normal execution guaranteed to be != Nil, since DLTypes.init fails if
+    // no ontology is provided. If the phase is instantiated by other means
+    // (e.g., in testing), this has to be set explicitly!
+    // TODO: It might still be an invalid file, handle error.
+    lazy val reasoner = new ReasonerHermit(fi)
 
     // Extract the DL type name.
     def dlTypeName(tpe: Type): String = {
@@ -133,6 +142,7 @@ class CheckerAnalyzerPlugin(global: Global) {
     }
 
     object ConcreteAnalyzerPlugin extends AnalyzerPlugin {
+      // Run during 'typer' phase.
       override def isActive(): Boolean = global.phase.id <= global.currentRun.typerPhase.id
 
       override def pluginsTyped(tpe: Type, typer: Typer, tree: Tree, mode: Mode, pt: Type): Type = {
@@ -156,9 +166,8 @@ class CheckerAnalyzerPlugin(global: Global) {
         // More than one type parameter (might be wrong)...
         else {
           // ...if not the same class. Issue warning in this case.
-          val warn = if (tpe.baseClasses == pt.baseClasses) false else true
           for ((tpe1, pt1) <- tpeArgs.zip(ptArgs)) {
-            typeCheck(tpe1, pt1, tree, mode, warnH = warn)
+            typeCheck(tpe1, pt1, tree, mode, warnH = tpe.baseClasses != pt.baseClasses)
           }
         }
         tpe

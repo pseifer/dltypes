@@ -1,4 +1,3 @@
-import java.io._
 import java.net.URLClassLoader
 
 import scala.io.Source
@@ -8,17 +7,19 @@ import scala.tools.nsc.util.ClassPath
 import scala.reflect.internal.util.BatchSourceFile
 import scala.tools.nsc.io.VirtualDirectory
 import de.uni_koblenz.dltypes.DLTypes
-import org.apache.geronimo.mail.util.StringBufferOutputStream
+import de.uni_koblenz.dltypes.components.MyGlobal
 
 import scala.collection.mutable.ListBuffer
 
 
-//object CompilationError extends Exception
-
-
-object TestTools {
+class TestTools(val loglvl: Int = 0) {
 
   // Public API
+
+  // 0 => No logging
+  // 1 => Print test names
+  // 2 => Above + code
+  // 3 => Above + enable dumps after 'typer' and 'superaccessor'
 
   // Run compiler on a single test case.
   def testCase(test: TestCase): (Boolean, Boolean) = test match {
@@ -30,10 +31,10 @@ object TestTools {
     // Construct the test case.
     val sources = mkTest(test)
 
-    LOGLVL match {
+    loglvl match {
       case 0 => Unit
-      case 1 => println(testsep + "\n" + name)
-      case 2 => println(testsep + "\n" + name + "\n" + test)
+      case 1 => println(80 * '-' + "\n" + name)
+      case _ => println(80 * '-' + "\n" + name + "\n" + test)
     }
 
     // Reset the reporter.
@@ -74,9 +75,9 @@ object TestTools {
     this
   }
 
-  def warning(t: (Boolean, Boolean)): Boolean = t._2 == true
-  def error(t: (Boolean, Boolean)): Boolean = t._1 == true
-  def success(t: (Boolean, Boolean)): Boolean = t._1 == false
+  def warning(t: (Boolean, Boolean)): Unit = assert(t._2 == true)
+  def failure(t: (Boolean, Boolean)): Unit = assert(t._1 == true)
+  def success(t: (Boolean, Boolean)): Unit = assert(t._1 == false)
 
   // Apply f for all cases matching TestResult r.
   def onlyFor(r: TestResult, f: (String, TestCase) => Unit): this.type = {
@@ -88,9 +89,6 @@ object TestTools {
   }
 
   // Internal (Here be dragons)
-
-  var LOGLVL = 0
-  private val testsep = "\n\n--------------------------------------------------------------------------------"
 
   // Internal storage for test cases.
   private var cases = ListBuffer[TestCase]()
@@ -167,14 +165,32 @@ object TestTools {
     parseIn(Success, "<nocategory>", "<nocase>", lines)
   }
 
+  // Construct test case, wrap in requirements and App class.
+  private def mkTest(test: String): List[BatchSourceFile] = {
+    val code =
+      List("import de.uni_koblenz.dltypes.runtime._",
+        "import de.uni_koblenz.dltypes.runtime.Sparql._",
+        "class Main extends App {",
+        test,
+        "}")
+    List(new BatchSourceFile("test", code.mkString("\n")))
+  }
+
   // The compiler settings.
   private val settings = new Settings
-  // settings.processArgumentString("")
+  if (loglvl >= 3) {
+    settings.processArgumentString("-Xprint:typer")
+    settings.processArgumentString("-Xprint:superaccessors")
+  }
 
-  val reporter = new ConsoleReporter(settings)
+  private val reporter = new ConsoleReporter(settings)
 
-  val compiler = new Global(settings, reporter) {
-    override protected def computeInternalPhases () {
+  private val compiler = new Global(settings, reporter) {
+    override protected def computeInternalPhases() = {
+      // Settings for tests (command line options not available,
+      // since phases are added directly.
+      MyGlobal.ontologies += "src/test/resources/wine.rdf"
+
       super.computeInternalPhases
       // Load all the DLTypes phases.
       for (phase <- new DLTypes(this).components)
@@ -193,15 +209,4 @@ object TestTools {
   // Use a virtual directory for compilation files (.class).
   private val virtualDir = new VirtualDirectory("(memory)", None)
   settings.outputDirs.setSingleOutput(virtualDir)
-
-  // Construct test case, wrap in requirements and App class.
-  private def mkTest(test: String): List[BatchSourceFile] = {
-    val code =
-      List("import de.uni_koblenz.dltypes.runtime._",
-        "import de.uni_koblenz.dltypes.runtime.Sparql._",
-        "class Main extends App {",
-        test,
-        "}")
-    List(new BatchSourceFile("test", code.mkString("\n")))
-  }
 }

@@ -6,7 +6,6 @@ name := "dltypes"
 libraryDependencies += "org.scala-lang" % "scala-compiler" % scalaVersion.value
 libraryDependencies += "de.uni_koblenz" %% "dltypes-lib" % "0.0.1-SNAPSHOT"
 libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.3"
-libraryDependencies += "org.scala-lang.modules" %% "scala-parser-combinators" % "1.0.6"
 libraryDependencies += "com.hermit-reasoner" % "org.semanticweb.hermit" % "1.3.8.1"
 
 artifact in (Compile, assembly) := {
@@ -20,3 +19,7 @@ assemblyMergeStrategy in assembly := {
  case PathList("META-INF", xs @ _*) => MergeStrategy.discard
  case x => MergeStrategy.first
 }
+
+test in assembly := {}
+
+assemblyJarName in assembly := "dltypes.jar"
