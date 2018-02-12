@@ -1,4 +1,4 @@
 <plugin>
-  <name>dl-types</name>
-  <classname>de.uni_koblenz.DLTypes</classname>
+  <name>dltypes</name>
+  <classname>de.uni_koblenz.dltypes.DLTypes</classname>
 </plugin>
