@@ -29,7 +29,8 @@ class Collector(val global: Global)
   class MyTransformer(unit: CompilationUnit) extends TypingTransformer(unit) with Extractor {
     val global: Collector.this.global.type = Collector.this.global
 
-    /*Rewrite:
+    /* Find cases where matching is done on DLType and add isSubsumed runtime checks.
+    Rewrite:
     x match {
       case y: `:RedWine` if <guard> => <body0 with y>
       case y: `:RedWine` => <body1 with y>
@@ -59,11 +60,16 @@ class Collector(val global: Global)
         // case x: `:RedWine` [if <guard>]* => <body>
         // (note that desugared ==)
         // case x @ (_: `:RedWine`) [if <guard>]* = <body>
-        case CaseDef(Bind(name, Typed(Ident(termNames.WILDCARD), DLType(tpt))), guard, body) =>
+        case CaseDef(Bind(name, Typed(Ident(termNames.WILDCARD), t @ DLType(tpt))), guard, body) =>
+          val fresh = currentUnit.freshTermName()
           if (guard.isEmpty)
-            cq"$name: IRI if ${name.toTermName}.isSubsumed($tpt) => $body"
+            cq"""$fresh: IRI if ${fresh.toTermName}.isSubsumed($tpt) => {
+                   val ${name.toTermName}: $t = $fresh;
+                   ..$body }"""
           else
-            cq"$name: IRI if ${name.toTermName}.isSubsumed($tpt) && ($guard) => $body"
+            cq"""$fresh: IRI if ${fresh.toTermName}.isSubsumed($tpt) && ($guard) => {
+                   val ${name.toTermName}: $t = $fresh;
+                   ..$body }"""
 
         // case _: `:RedWine` [if <guard>]* => <body>
         // (note that desugared ==)
@@ -81,6 +87,15 @@ class Collector(val global: Global)
       }
     }
 
+    // Returns true, if the cases matches on type, which is also DL type.
+    def isDL(c: CaseDef): Boolean = {
+      c match {
+        case CaseDef(Bind(_, Typed(Ident(termNames.WILDCARD), DLType(_))), _, _) => true
+        case CaseDef(Typed(Ident(termNames.WILDCARD), DLType(_)), _, _) => true
+        case _ => false
+      }
+    }
+
     override def transform(tree: Tree): Tree = tree match {
       // Match ordinary DL types and add them to the global symbol table for Typedef phase.
       case DLType(n) =>
@@ -89,36 +104,43 @@ class Collector(val global: Global)
 
       // Transform type case expressions (see transformCases)
       case Match(l, cases) =>
-        val newCs = cases.map(transformCases)
-        super.transform(tree)
-        atPos(tree.pos.makeTransparent)(
-          q"$l match { case ..$newCs }"
-        )
+        if (l.isEmpty) {
+          if (cases.exists(isDL))
+            reporter.error(tree.pos, "[DL] Can't handle implicit match for DL type. Use <var> => <var> match { ... } instead.")
+          super.transform(tree)
+        }
+        else {
+          reporter.echo("IS EMPTY")
+          val newCs = cases.map(transformCases)
+          super.transform(tree)
+          atPos(tree.pos.makeTransparent)(
+            q"$l match { case ..$newCs }"
+          )
+         }
 
-      // Match the application of isInstanceOf[<DLType>] and rewrite it to runtime DLType check:
-      /*Rewrite:
+      /* Match the application of isInstanceOf[<DLType>] and rewrite it to runtime DLType check:
+      Rewrite:
           <expr>.isInstanceOf[<DLType>]
       To:
           { val t1 = <expr>    // avoid executing <expr> twice.
             t1.isInstanceOf[IRI] && { // check if is IRI
               val t2 = t1.asInstanceOf[IRI] // if so, cast to IRI
               t2.isSubsumed(<DLType) // the runtime DL type check
-            }
-      */
+            } */
       case TypeApply(Select(q, name), List(DLType(tpt))) if name.toString == "isInstanceOf" =>
         // Generate two fresh names.
-        val name1 = currentUnit.freshTermName()
-        val name2 = currentUnit.freshTermName()
+        val fresh1 = currentUnit.freshTermName()
+        val fresh2 = currentUnit.freshTermName()
         atPos(tree.pos.makeTransparent)(
-          q"""{ val $name1: Any = $q;
-                $name1.isInstanceOf[IRI] && {
-                  val $name2 = $name1.asInstanceOf[IRI];
-                  $name2.isSubsumed($tpt)
+          q"""{ val $fresh1: Any = $q;
+                $fresh1.isInstanceOf[IRI] && {
+                  val $fresh2 = $fresh1.asInstanceOf[IRI];
+                  $fresh2.isSubsumed($tpt)
                 }
               }"""
         )
 
-      // Match the application of StringContect(<iri>).iri to Nil (i.e., IRI"" literals)
+      // Match the application of StringContext(<iri>).iri to Nil (i.e., IRI"" literals)
       // and add asInstanceOf to declare the nominal type.
       case orig @ Apply(Select(Apply(obj, List(i)), m), Nil)
         if m.toString == "iri" && obj.toString == "StringContext" =>
