@@ -21,8 +21,8 @@ class PluginTest extends FreeSpec {
   "[S] isInstanceOf example" in {
     success(testCase("Test0",
       """
-        |val x: `:Wine` = iri"PeterMccoyChardonnay"
-        |if ({println("hi"); iri"PeterMccoyChardonnay"}.isInstanceOf[`:WhiteWine`])
+        |val x: Any = iri"PeterMccoyChardonnay"
+        |if (x.isInstanceOf[`:WhiteWine`])
         |  println("yup")
       """.stripMargin))
   //   GENERATES
