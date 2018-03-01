@@ -1,6 +1,8 @@
 package de.uni_koblenz.dltypes
 package components
 
+import de.uni_koblenz.dltypes.tools.{DLEConcept, PrettyPrinter}
+
 import scala.collection.mutable
 import scala.tools.nsc.ast.TreeDSL
 import scala.tools.nsc.Global
@@ -10,7 +12,23 @@ import scala.tools.nsc.transform.TypingTransformers
 
 
 object MyGlobal {
+  private object Gensym {
+    private var c: Int = 0
+    def fresh(): String = {
+      c += 1
+      s"SparqlQueryType$c"
+    }
+  }
+
+  def newSparqlQueryType(): String = {
+    val t = Gensym.fresh()
+    symbolTable += t
+    qtypeTable.+=((t, None))
+    t
+  }
+
   val symbolTable: mutable.Set[String] = mutable.Set()
+  val qtypeTable: mutable.Map[String, Option[DLEConcept]] = mutable.Map()
   var ontologies: mutable.MutableList[String] = mutable.MutableList()
 }
 
@@ -28,6 +46,8 @@ class Collector(val global: Global)
 
   class MyTransformer(unit: CompilationUnit) extends TypingTransformer(unit) with Extractor {
     val global: Collector.this.global.type = Collector.this.global
+
+    val pp = new PrettyPrinter
 
     /* Find cases where matching is done on DLType and add isSubsumed runtime checks.
     Rewrite:
@@ -130,13 +150,11 @@ class Collector(val global: Global)
       case TypeApply(Select(q, name), List(DLType(tpt))) if name.toString == "isInstanceOf" =>
         // Generate two fresh names.
         val fresh1 = currentUnit.freshTermName()
-        val fresh2 = currentUnit.freshTermName()
+        // TODO: Check if tpt can be parsed, raise error if not.
         atPos(tree.pos.makeTransparent)(
           q"""{ val $fresh1: Any = $q;
-                $fresh1.isInstanceOf[IRI] && {
-                  val $fresh2 = $fresh1.asInstanceOf[IRI];
-                  $fresh2.isSubsumed($tpt)
-                }
+                $fresh1.isInstanceOf[IRI] &&
+                  $fresh1.asInstanceOf[IRI].isSubsumed($tpt);
               }"""
         )
 
@@ -148,6 +166,26 @@ class Collector(val global: Global)
         MyGlobal.symbolTable += newType
         atPos(tree.pos.makeTransparent)(
           q"$orig.asInstanceOf[${newTypeName(newType)}]"
+        )
+
+      // Match the application of StringContext(<query>).sparql
+      // (i.e., sparql"" literals) with no arguments.
+      case orig @ Apply(Select(Apply(obj, List(i)), m), Nil)
+        if m.toString == "sparql" && obj.toString == "StringContext" =>
+        val tpe = QueryTyper.noArgs(i.toString)
+        val newType = pp.dleConcept(tpe)
+        MyGlobal.symbolTable += newType
+        atPos(tree.pos.makeTransparent)(
+          q"$orig.asInstanceOf[List[${newTypeName(newType)}]]" // TODO: This only for one sparql variable.
+        )
+
+      // Match the application of StringContext(<query>).sparql
+      // (i.e., sparql"" literals) with arguments.
+      case orig @ Apply(Select(Apply(obj, _), m), _)
+        if m.toString == "sparql" && obj.toString == "StringContext" =>
+        val tpe = MyGlobal.newSparqlQueryType()
+        atPos(tree.pos.makeTransparent)(
+          q"$orig.asInstanceOf[${newTypeName(tpe)}]" // TODO: This only for one sparql variable.
         )
 
       case _ => super.transform(tree)

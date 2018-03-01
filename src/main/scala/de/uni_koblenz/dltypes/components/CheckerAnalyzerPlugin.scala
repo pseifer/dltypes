@@ -67,6 +67,14 @@ class CheckerAnalyzerPlugin(global: Global) {
       tpe.toString != "de.uni_koblenz.dltypes.runtime.DLType"
     }
 
+    def stripQueryType(tpe: Type): String =
+      tpe.toString.split('.').last
+
+    // Test whether tpe is a sparql query type placeholder.
+    def isQueryType(tpe: Type): Boolean = {
+      isDLType(tpe) && stripQueryType(tpe).startsWith("SparqlQueryType")
+    }
+
     // Report additional information, if debug mode is turned on.
     def debugError(tpe: Type, pt: Type, tree: Tree, mode: Mode): Unit = {
       if (debug) {
@@ -148,6 +156,50 @@ class CheckerAnalyzerPlugin(global: Global) {
       override def pluginsTyped(tpe: Type, typer: Typer, tree: Tree, mode: Mode, pt: Type): Type = {
         val tpeArgs = getTypeArgs(tpe)
         val ptArgs = getTypeArgs(pt)
+
+        // SPARQL queries ...
+        if (tpe.kind == "NullaryMethodType" && pt.isWildcard &&
+            (tpe.resultType match {
+              case TypeRef(_, b, _) =>
+                b.toString.startsWith("type SparqlQueryType")
+              case _ => false })) {
+
+            reporter.echo("TPE " + tpe.toString + tpe.kind)
+            reporter.echo(tpe.resultType.toString)
+            reporter.echo("TP " + pt.toString)
+            reporter.echo(tree.toString + "\n\n\n")
+            tree match {
+              //                                       SparqlHelper  apply             sparql           instanceOf
+              case TypeApply(Select(Apply(Select(Apply(_, List(Apply(_, queryParts))), _), sparqlArgs), _), List(sqt)) =>
+                val uSqt = sqt.toString.split('.').last
+                reporter.echo("queryParts " + queryParts)
+                reporter.echo("sparqlArgs " + sparqlArgs)
+                reporter.echo("  " + sparqlArgs.head)
+                reporter.echo("  " + sparqlArgs.head.tpe)
+                reporter.echo("SparqlQueryTypeX " + uSqt)
+                reporter.echo("Registered as " + MyGlobal.qtypeTable(uSqt).toString)
+                MyGlobal.qtypeTable.update(uSqt,
+                  Some(QueryTyper.withArgs(
+                    queryParts.map(_.toString),
+                    sparqlArgs.map(_.toString))))
+              case _ => reporter.error(tree.pos, "[DL] Internal Error: Malformed query type.")
+            }
+          }
+
+          // IDEA
+          // Match the case:
+          // TPE => List[DLTypeDefs.SparqlQueryType1]
+          // TP ?
+          // Then tree is: de.uni_koblenz.dltypes.runtime.Sparql.SparqlHelper(scala.StringContext.apply("SELECT ?x WHERE { ?x a ", " }")).sparql(Main.this.s).asInstanceOf[List[DLTypeDefs.SparqlQueryType1]]
+
+          // This should be earliest occurence of SparqlQueryTypeX TODO: Verify this
+          // Then deduce type with QueryTyper and add to lookup table from SparqlQueryTypes => Option[DLEConcept]
+
+        // TODO
+        //if (isQueryType(tpe) && isQueryType((pt))) {
+        //  val tpeQ = MyGlobal.qtypeTable.get(stripQueryType(tpe))
+        //  val ptQ = MyGlobal.qtypeTable.get(stripQueryType(pt))
+        //}
 
         // Cases were DLType is inferred (or explicitly used) need to be declared
         // explicitly with either a more specific type, or Top (⊤).
