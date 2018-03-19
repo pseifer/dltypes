@@ -5,22 +5,33 @@ import org.semanticweb.HermiT.{Reasoner => HermitReasoner}
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.model._
 import uk.ac.manchester.cs.owl.owlapi.OWLNamedIndividualImpl
-
 import java.io.File
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
-
 import de.uni_koblenz.dltypes.tools._
+import org.semanticweb.owlapi.vocab.XSDVocabulary
+
+
+class VariableInReasonerException extends Exception
 
 
 trait Reasoner {
-  val f: File
   def prove(stmt: DLETruthy): Boolean
 }
 
 
-class ReasonerHermit(val ontologyFile: File) {
+class TrueReasoner() extends Reasoner {
+  def prove(stmt: DLETruthy): Boolean = true
+}
+
+
+class FalseReasoner() extends Reasoner {
+  def prove(stmt: DLETruthy): Boolean = false
+}
+
+
+class ReasonerHermit(val ontologyFile: File) extends Reasoner {
   import scala.language.implicitConversions
 
   val manager: OWLOntologyManager = OWLManager.createOWLOntologyManager()
@@ -46,12 +57,17 @@ class ReasonerHermit(val ontologyFile: File) {
   def roleToOWL(role: DLERole): OWLObjectPropertyExpression =
     role match {
       case Role(iri) => df.getOWLObjectProperty(toIRI(iri))
+      //case Data(iri) => df.getOWLDataProperty(toIRI(iri)).asOWLObjectProperty()
       case Inverse(r) => df.getOWLObjectInverseOf(roleToOWL(r))
     }
   implicit val iRoleToOWL: DLERole => OWLObjectPropertyExpression = roleToOWL
 
+  @throws(classOf[VariableInReasonerException])
   def conceptToOWL(concept: DLEConcept): OWLClassExpression =
     concept match {
+      case Variable(_) => throw new VariableInReasonerException
+      //case Type(iri) => df.getOWLDatatype(toIRI(iri)).asOWLClass()
+      //  df.getOWLDataSomeValuesFrom()
       case Nominal(iri) =>
         df.getOWLObjectOneOf(new OWLNamedIndividualImpl(toIRI(iri)))
       case Concept(iri) => df.getOWLClass(toIRI(iri))
@@ -63,8 +79,13 @@ class ReasonerHermit(val ontologyFile: File) {
         df.getOWLObjectIntersectionOf(conceptToOWL(lexpr), conceptToOWL(rexpr))
       case Union(lexpr, rexpr) =>
         df.getOWLObjectUnionOf(conceptToOWL(lexpr), conceptToOWL(rexpr))
-      case Existential(role, expr) =>
-        df.getOWLObjectSomeValuesFrom(roleToOWL(role), conceptToOWL(expr))
+      case Existential(Data(iri1), Type(iri2)) =>
+        df.getOWLDataSomeValuesFrom(df.getOWLDataProperty(toIRI(iri1)), df.getOWLDatatype(toIRI(iri2)))
+      case Existential(Data(iri1), Top) =>
+        throw new RuntimeException("top in data property") // TODO fix
+      case Existential(Data(iri1), Bottom) =>
+        throw new RuntimeException("bottom in data property") // TODO fix
+      case Existential(role, expr) => df.getOWLObjectSomeValuesFrom(roleToOWL(role), conceptToOWL(expr))
       case Universal(role, expr) =>
         df.getOWLObjectAllValuesFrom(roleToOWL(role), conceptToOWL(expr))
     }
@@ -97,8 +118,8 @@ class ReasonerHermit(val ontologyFile: File) {
   private def unsatisfiable(c: DLEConcept): Boolean = !satisfiable(c)
 
   private def equivalent(c: DLEConcept, d: DLEConcept): Boolean =
-    if (c.isOWLNothing) unsatisfiable(c)
-    else if (d.isOWLNothing) unsatisfiable(d)
+    if (c.isOWLNothing) unsatisfiable(d)
+    else if (d.isOWLNothing) unsatisfiable(c)
     else {
       val normal = df.getOWLEquivalentClassesAxiom(c, d)
       hermit.isEntailed(normal)

@@ -5,7 +5,7 @@ import scala.tools.nsc.Mode
 import scala.util.{Failure => UtilFailure, Success => UtilSuccess, Try => UtilTry}
 import java.io.File
 
-import de.uni_koblenz.dltypes.backend.ReasonerHermit
+import de.uni_koblenz.dltypes.backend.{MyGlobal, QueryTyper, ReasonerHermit}
 import de.uni_koblenz.dltypes.tools._
 import de.uni_koblenz.dltypes.runtime.DLType
 
@@ -35,12 +35,13 @@ class CheckerAnalyzerPlugin(global: Global) {
 
     // Lazy, since MyGlobal.ontologies is set by DLTypes.init (after
     // CheckerAnalyzerPlugin is initialized.
-    lazy val fi = new File(MyGlobal.ontologies.head) // This...
+    lazy val fi = new File(MyGlobal.ontologies(":")) // This...
     // ... is in normal execution guaranteed to be != Nil, since DLTypes.init fails if
     // no ontology is provided. If the phase is instantiated by other means
     // (e.g., in testing), this has to be set explicitly!
     // TODO: It might still be an invalid file, handle error.
     lazy val reasoner = new ReasonerHermit(fi)
+    lazy val qtyper = new QueryTyper(reasoner)
 
     // Extract the DL type name.
     def dlTypeName(tpe: Type): String = {
@@ -51,11 +52,19 @@ class CheckerAnalyzerPlugin(global: Global) {
     }
 
     // Attempt to parse the DLEConcept representation of an DL type.
-    def parseDL(tpe: Type): UtilTry[DLEConcept] = {
-      val s = dlTypeName(tpe)
-      parser.parse(parser.dlexpr, s) match {
-        case parser.Success(m, _) => UtilSuccess(m.asInstanceOf[DLEConcept])
-        case parser.NoSuccess(msg, _) => UtilFailure(new Exception(msg))
+    def parseDL(tpe: Type): UtilTry[List[DLEConcept]] = {
+      if (isQueryType(tpe))
+        MyGlobal.qtypeTable.getOrElse(stripQueryType(tpe), None) match {
+          case Some(t) => UtilSuccess(t)
+          case None => UtilFailure(new Exception(s"[DL] Internal Error: Encountered unseen internal query type $tpe"))
+        }
+        // TODO: else if (isAnnotatedQueryType) return List parsed from declared type
+      else {
+        val s = dlTypeName(tpe)
+        parser.parse(parser.dlexpr, s) match {
+          case parser.Success(m, _) => UtilSuccess(List(m.asInstanceOf[DLEConcept]))
+          case parser.NoSuccess(msg, _) => UtilFailure(new Exception(msg))
+        }
       }
     }
 
@@ -73,6 +82,16 @@ class CheckerAnalyzerPlugin(global: Global) {
     // Test whether tpe is a sparql query type placeholder.
     def isQueryType(tpe: Type): Boolean = {
       isDLType(tpe) && stripQueryType(tpe).startsWith("SparqlQueryType")
+    }
+
+    def isQueryDef(tpe: Type): Boolean = {
+      tpe.kind == "NullaryMethodType" &&
+        (tpe.resultType match {
+          case TypeRef(_, b, c) =>
+            b.toString.startsWith("type List") &&
+              c.nonEmpty &&
+              c.head.typeSymbolDirect.toString.startsWith("type SparqlQueryType")
+        })
     }
 
     // Report additional information, if debug mode is turned on.
@@ -111,22 +130,31 @@ class CheckerAnalyzerPlugin(global: Global) {
       if (isDLType(tpe) && isDLType(pt)) {
         parseDL(tpe).flatMap { dltpe =>
           parseDL(pt).map { dlpt =>
-            val test = Subsumed(dltpe, dlpt)
-            reportCheck(test)
-            if (warnH) reporter.warning(tree.pos, "[DL] Using argument matching heuristic.")
-            (reasoner.prove(test), test)
+            if (dltpe.size != dlpt.size)
+              reporter.error(tree.pos, "[DL] Wrong arity in query type. Expected: " + dltpe.size + " but found " + dlpt.size)
+            if (warnH)
+              reporter.warning(tree.pos, "[DL] Using argument matching heuristic.")
+
+            dltpe.zip(dlpt).map { case (l, r) =>
+              val test = Subsumed(l, r)
+              reportCheck(test)
+              (test, reasoner.prove(test))
+            }
           }
-        } match {
-          case UtilFailure(msg) =>
-            reporter.error(tree.pos, "[DL] Type Parse Error: <" + msg + ">")
-          case UtilSuccess((b, test)) =>
+        }
+      } match {
+        case UtilFailure(e) =>
+          reporter.error(tree.pos, "[DL] Type Parse Error: " + e.getMessage)
+        case UtilSuccess(rs) =>
+          rs.foreach { case (test, b) =>
             if (!b) {
               debugError(tpe, pt, tree, mode)
               reporter.error(tree.pos, "[DL] Type Error: <"
                 + formatSubsumed(test) + "> was not true.")
             }
-        }
+          }
       }
+
       else if (isDLType(tpe) && !isDLType(pt) && pt.isFinalType && !(pt == typeOf[Nothing]))
         reporter.error(tree.pos, "[DL] Type Error: Incompatible DLType " + tpe + " with " + pt)
       else if (isDLType(pt) && !isDLType(tpe) && tpe.isFinalType && !(tpe == typeOf[Nothing]))
@@ -157,49 +185,44 @@ class CheckerAnalyzerPlugin(global: Global) {
         val tpeArgs = getTypeArgs(tpe)
         val ptArgs = getTypeArgs(pt)
 
-        // SPARQL queries ...
-        if (tpe.kind == "NullaryMethodType" && pt.isWildcard &&
-            (tpe.resultType match {
-              case TypeRef(_, b, _) =>
-                b.toString.startsWith("type SparqlQueryType")
-              case _ => false })) {
-
-            reporter.echo("TPE " + tpe.toString + tpe.kind)
-            reporter.echo(tpe.resultType.toString)
-            reporter.echo("TP " + pt.toString)
-            reporter.echo(tree.toString + "\n\n\n")
-            tree match {
-              //                                       SparqlHelper  apply             sparql           instanceOf
-              case TypeApply(Select(Apply(Select(Apply(_, List(Apply(_, queryParts))), _), sparqlArgs), _), List(sqt)) =>
-                val uSqt = sqt.toString.split('.').last
-                reporter.echo("queryParts " + queryParts)
-                reporter.echo("sparqlArgs " + sparqlArgs)
-                reporter.echo("  " + sparqlArgs.head)
-                reporter.echo("  " + sparqlArgs.head.tpe)
-                reporter.echo("SparqlQueryTypeX " + uSqt)
-                reporter.echo("Registered as " + MyGlobal.qtypeTable(uSqt).toString)
-                MyGlobal.qtypeTable.update(uSqt,
-                  Some(QueryTyper.withArgs(
-                    queryParts.map(_.toString),
-                    sparqlArgs.map(_.toString))))
-              case _ => reporter.error(tree.pos, "[DL] Internal Error: Malformed query type.")
+        // Definition of SPARQL query.
+        if (isQueryDef(tpe)) tree match {
+        //reporter.echo("TPE " + tpe.toString + tpe.kind)
+        //reporter.echo(tpe.resultType.toString)
+        //reporter.echo("TP " + pt.toString)
+        //reporter.echo(tree.toString + "\n\n\n")
+          // The case where SparqlQueryTypeX has to be extracted.
+          //                                       SparqlHelper  apply             sparql           instanceOf
+          case TypeApply(Select(Apply(Select(Apply(_, List(Apply(_, queryParts))), _), sparqlArgs), _), List(sqt)) =>
+            val uSqt = sqt.toString.split('.').last.dropRight(1) // TODO: This too hacky.
+            //reporter.echo("queryParts " + queryParts)
+            //reporter.echo("sparqlArgs " + sparqlArgs)
+            //reporter.echo("  " + sparqlArgs.)
+            //reporter.echo("  " + sparqlArgs.head.tpe)
+            //reporter.echo("SparqlQueryTypeX " + uSqt)
+            //reporter.echo("Registered as " + MyGlobal.qtypeTable(uSqt).toString)
+            // Calculate type for query.
+            qtyper.run(
+                queryParts.map(_.toString.stripPrefix("\"").stripSuffix("\"")),
+                sparqlArgs.map { x =>
+                    if (isDLType(x.tpe)) {
+                      parseDL(x.tpe) match {
+                        case UtilSuccess(t) if t.size == 1 => Right(t.head)
+                        case UtilFailure(e) =>
+                          reporter.error(tree.pos, "[DL] Type Parse error (in SPARQL argument): " + e.getMessage)
+                          Right(Bottom)
+                      }
+                    }
+                    else
+                      Left(x.tpe.toString)
+                }) match {
+               // sparqlArgs.map(_.tpe.toString))
+              case UtilFailure(e) => reporter.error(tree.pos, s"[DL] SPARQL error: ${e.getMessage} ($e)")
+              case UtilSuccess(x) => MyGlobal.qtypeTable.update(uSqt, Some(x))
             }
-          }
-
-          // IDEA
-          // Match the case:
-          // TPE => List[DLTypeDefs.SparqlQueryType1]
-          // TP ?
-          // Then tree is: de.uni_koblenz.dltypes.runtime.Sparql.SparqlHelper(scala.StringContext.apply("SELECT ?x WHERE { ?x a ", " }")).sparql(Main.this.s).asInstanceOf[List[DLTypeDefs.SparqlQueryType1]]
-
-          // This should be earliest occurence of SparqlQueryTypeX TODO: Verify this
-          // Then deduce type with QueryTyper and add to lookup table from SparqlQueryTypes => Option[DLEConcept]
-
-        // TODO
-        //if (isQueryType(tpe) && isQueryType((pt))) {
-        //  val tpeQ = MyGlobal.qtypeTable.get(stripQueryType(tpe))
-        //  val ptQ = MyGlobal.qtypeTable.get(stripQueryType(pt))
-        //}
+          // In other cases, fall through and perform the type check.
+          case _ => Unit
+        }
 
         // Cases were DLType is inferred (or explicitly used) need to be declared
         // explicitly with either a more specific type, or Top (⊤).
@@ -209,6 +232,7 @@ class CheckerAnalyzerPlugin(global: Global) {
           reporter.error(tree.pos, "[DL] Explicit use or inference of 'DLType' violates type safety."
             + "\nPossible solution: Declare more specific type or use ⊤ explicitly.")
 
+        // TODO: This has to be done recursively, in case type args are poly
         // No type parameters (correct).
         if (tpeArgs.isEmpty && ptArgs.isEmpty)
           typeCheck(tpe, pt, tree, mode)

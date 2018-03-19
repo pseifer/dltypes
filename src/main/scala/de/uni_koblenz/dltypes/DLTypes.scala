@@ -1,8 +1,9 @@
 package de.uni_koblenz.dltypes
 
+import de.uni_koblenz.dltypes.backend.MyGlobal
+
 import scala.tools.nsc.Global
 import scala.tools.nsc.plugins.{Plugin, PluginComponent}
-
 import de.uni_koblenz.dltypes.components._
 
 
@@ -13,13 +14,19 @@ class DLTypes (override val global: Global) extends Plugin {
   override def init(options: List[String], error: String => Unit): Boolean = {
     options.find(_.startsWith("ontology:")) match {
       case Some(option) =>
-        MyGlobal.ontologies += option.drop("ontology:".length)
+        MyGlobal.ontologies += ":" -> option.drop("ontology:".length)
         true
       case _ =>
         error("-P:dltypes:ontology not specified")
         false
     }
   }
+
+  // TODO:
+  // Arguments to add more ontologies.
+  // Possible to add 1 ontology for ':'
+  // All further need prefix, which has to be used in queries and types.
+  // Pass over to runtime as well.
 
   override val optionsHelp: Option[String] = Some(
     "-P:dltypes:ontology:s        use ontology 's' in resource folder.")

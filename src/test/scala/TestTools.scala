@@ -7,7 +7,7 @@ import scala.tools.nsc.util.ClassPath
 import scala.reflect.internal.util.BatchSourceFile
 import scala.tools.nsc.io.VirtualDirectory
 import de.uni_koblenz.dltypes.DLTypes
-import de.uni_koblenz.dltypes.components.MyGlobal
+import de.uni_koblenz.dltypes.backend.MyGlobal
 
 import scala.collection.mutable.ListBuffer
 
@@ -189,7 +189,7 @@ class TestTools(val loglvl: Int = 0) {
     override protected def computeInternalPhases() = {
       // Settings for tests (command line options not available,
       // since phases are added directly.
-      MyGlobal.ontologies += "src/test/resources/wine.rdf"
+      MyGlobal.ontologies += ":" -> "src/test/resources/wine.rdf"
 
       super.computeInternalPhases
       // Load all the DLTypes phases.

@@ -1,6 +1,8 @@
 package de.uni_koblenz.dltypes
 package components
 
+import de.uni_koblenz.dltypes.backend.MyGlobal
+
 import scala.tools.nsc.Global
 import scala.tools.nsc.plugins.PluginComponent
 import scala.tools.nsc.transform.{Transform, TypingTransformers}
