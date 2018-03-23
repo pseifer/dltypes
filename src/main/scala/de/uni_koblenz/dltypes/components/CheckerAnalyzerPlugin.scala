@@ -56,9 +56,20 @@ class CheckerAnalyzerPlugin(global: Global) {
       if (isQueryType(tpe))
         MyGlobal.qtypeTable.getOrElse(stripQueryType(tpe), None) match {
           case Some(t) => UtilSuccess(t)
-          case None => UtilFailure(new Exception(s"[DL] Internal Error: Encountered unseen internal query type $tpe"))
+          case None => UtilFailure(new Exception(
+            s"[DL] Internal Error: Encountered unseen internal query type $tpe"))
         }
         // TODO: else if (isAnnotatedQueryType) return List parsed from declared type
+      else if (isInferredDL(tpe))
+        MyGlobal.itypeTable.getOrElse(stripInferredType(tpe), (None, Nil)) match {
+          case (Some(t), _) => UtilSuccess(t)
+          case (None, Nil) => UtilFailure(new Exception(
+            s"[DL] Internal Error: Encountered unseen (explicit) inferred DL type $tpe"))
+          case (None, lst) =>
+            val us = DLEConcept.simplify(lst.foldLeft(Bottom: DLEConcept)(Union: (DLEConcept, DLEConcept) => DLEConcept))
+            MyGlobal.itypeTable += stripInferredType(tpe) -> (Some(List(us)), Nil)
+            UtilSuccess(List(us))
+        }
       else {
         val s = dlTypeName(tpe)
         parser.parse(parser.dlexpr, s) match {
@@ -79,9 +90,16 @@ class CheckerAnalyzerPlugin(global: Global) {
     def stripQueryType(tpe: Type): String =
       tpe.toString.split('.').last
 
+    def stripInferredType(tpe: Type): String =
+      tpe.toString.split('.').last
+
     // Test whether tpe is a sparql query type placeholder.
     def isQueryType(tpe: Type): Boolean = {
       isDLType(tpe) && stripQueryType(tpe).startsWith("SparqlQueryType")
+    }
+
+    def isInferredDL(tpe: Type): Boolean = {
+      isDLType(tpe) && stripInferredType(tpe).startsWith("InferredDLType")
     }
 
     def isQueryDef(tpe: Type): Boolean = {
@@ -126,8 +144,31 @@ class CheckerAnalyzerPlugin(global: Global) {
 
     // Perform DL type checks.
     def typeCheck(tpe: Type, pt: Type, tree: Tree, mode: Mode, warnH: Boolean = false): Unit = {
+      // In this case, build/update the inference constraints.
+      if (tpe != pt
+        && isInferredDL(pt)
+        && isDLType(tpe)) {
+        parseDL(tpe) match {
+          case UtilFailure(e) =>
+            reporter.error(tree.pos, "[DL] Type Parse Error: " + e.getMessage)
+          case UtilSuccess(t) =>
+            MyGlobal.itypeTable.getOrElse(stripInferredType(pt), (None, Nil)) match {
+              case (None, xs) => MyGlobal.itypeTable += stripInferredType(pt) -> (None, xs ++ List(t.head)) // TODO: What if more than one? Query types? Impossible?
+              case _ => Unit
+            }
+        }
+        //MyGlobal.itypeTable.update
+        //reporter.echo("TPE < " + tpe + " >")
+        //reporter.echo("---\n" + tree + "\n---\n")
+      }
+      //if (isInferredDL(tpe)) {
+      //  reporter.echo("+++++ TPE +++++ < " + tpe + " >")
+      //  reporter.echo("PT < " + pt + " >")
+      //  reporter.echo("---\n" + tree + "\n---\n")
+      //}
+
       // If both are DL types, do subsumed(tpe, pt) check.
-      if (isDLType(tpe) && isDLType(pt)) {
+      else if (isDLType(tpe) && isDLType(pt)) {
         parseDL(tpe).flatMap { dltpe =>
           parseDL(pt).map { dlpt =>
             if (dltpe.size != dlpt.size)
@@ -137,8 +178,12 @@ class CheckerAnalyzerPlugin(global: Global) {
 
             dltpe.zip(dlpt).map { case (l, r) =>
               val test = Subsumed(l, r)
-              reportCheck(test)
-              (test, reasoner.prove(test))
+              if (l == r)
+                (test, true)
+              else {
+                reportCheck(test)
+                (test, reasoner.prove(test))
+              }
             }
           }
         }
@@ -231,6 +276,9 @@ class CheckerAnalyzerPlugin(global: Global) {
           }.exists(identity))
           reporter.error(tree.pos, "[DL] Explicit use or inference of 'DLType' violates type safety."
             + "\nPossible solution: Declare more specific type or use ⊤ explicitly.")
+
+        // TODO: (pure) DL if conditions can't be inferred.
+        // ...
 
         // TODO: This has to be done recursively, in case type args are poly
         // No type parameters (correct).

@@ -22,4 +22,11 @@ trait Extractor {
       case _ => None
     }
   }
+
+  object DLInference {
+    def unapply(tree: Tree): Boolean = tree match {
+      case Ident(n) => n.toString == "$qmark$qmark$qmark"
+      case _ => false
+    }
+  }
 }

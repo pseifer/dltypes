@@ -12,17 +12,32 @@ object MyGlobal {
   // Generator for query types.
   private object Gensym {
     private var c: Int = 0
-    def fresh(): String = {
+
+    def freshQ(): String = {
       c += 1
       s"SparqlQueryType$c"
+    }
+
+    def freshI(): String = {
+      c += 1
+      s"InferredDLType$c"
     }
   }
 
   // Generate and register a new SPARQL query type (placeholder).
   def newSparqlQueryType(): String = {
-    val t = Gensym.fresh()
+    val t = Gensym.freshQ()
     symbolTable += t
-    qtypeTable.+=((t, None))
+    qtypeTable += t -> None
+    t
+  }
+
+  // Generate and register a new inferred DL type (placeholder).
+  def newInferredDLType(): String = {
+    val t = Gensym.freshI()
+    symbolTable += t
+    itypeTable += t -> (None, Nil)
+    itypeTable += t -> (None, Nil)
     t
   }
 
@@ -45,6 +60,10 @@ object MyGlobal {
   // This gets initialized with None values when the type is generated and set
   // to the DLEConcept when the query is typed.
   val qtypeTable: mutable.Map[String, Option[List[DLEConcept]]] = mutable.Map()
+
+  // Similar to qtypeTable, but for types that request explicitly to infer DL type
+  // via the `???` constant.
+  val itypeTable: mutable.Map[String, (Option[List[DLEConcept]], List[DLEConcept])] = mutable.Map()
 
   // Map of ontologies (Prefix -> IRI).
   // Currently only contains a single mapping from ':' to the ontology

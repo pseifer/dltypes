@@ -100,6 +100,11 @@ class Collector(val global: Global)
         MyGlobal.symbolTable += n
         tree
 
+      // Match explicit DL type inference.
+      case DLInference() =>
+        val tpe = MyGlobal.newInferredDLType()
+        Ident(newTypeName(tpe))
+
       // Transform type case expressions (see transformCases)
       case Match(l, cases) =>
         if (l.isEmpty) {
@@ -147,7 +152,7 @@ class Collector(val global: Global)
         )
 
       // Match the application of StringContext(<query>).sparql
-      // (i.e., sparql"" literals) with arguments.
+      // (i.e., sparql"" literals).
       case orig @ Apply(Select(Apply(obj, _), m), _)
         if m.toString == "sparql" && obj.toString == "StringContext" =>
         val tpe = MyGlobal.newSparqlQueryType()
