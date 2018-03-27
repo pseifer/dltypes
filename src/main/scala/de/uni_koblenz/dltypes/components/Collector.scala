@@ -9,6 +9,7 @@ import scala.tools.nsc.Global
 import scala.tools.nsc.plugins.PluginComponent
 import scala.tools.nsc.transform.Transform
 import scala.tools.nsc.transform.TypingTransformers
+import scala.util.matching.Regex
 
 
 class Collector(val global: Global)
@@ -94,6 +95,19 @@ class Collector(val global: Global)
       }
     }
 
+    // Returns true, if the list
+    def isSimpleQuery(parts: List[String]): Boolean =
+      """^\s*(?i)(PREFIX|SELECT|ASK|CONSTRUCT|DESCRIBE|BASE).*""".r
+        .findPrefixMatchOf(parts.head)
+        .isEmpty
+
+    // Wraps a query (separated in parts) in such a way, that the result is
+    // equivalent to the query: SELECT * WHERE { <q> }
+    def wrapSimpleQuery(parts: List[String]): List[String] = {
+      val t1 = ("SELECT * WHERE {" + parts.head) :: parts.tail
+      t1.init ++ List(t1.last + "}")
+    }
+
     override def transform(tree: Tree): Tree = tree match {
       // Match ordinary DL types and add them to the global symbol table for Typedef phase.
       case DLType(n) =>
@@ -153,12 +167,26 @@ class Collector(val global: Global)
 
       // Match the application of StringContext(<query>).sparql
       // (i.e., sparql"" literals).
-      case orig @ Apply(Select(Apply(obj, _), m), _)
+      case orig @ Apply(Select(Apply(obj, query), m), r)
         if m.toString == "sparql" && obj.toString == "StringContext" =>
+        // Generate the new type for this query.
         val tpe = MyGlobal.newSparqlQueryType()
-        atPos(tree.pos.makeTransparent)(
-          q"$orig.asInstanceOf[List[${newTypeName(tpe)}]]"
-        )
+        // Transform query tree to String.
+        val strQuery = query.map(_.toString().stripSuffix("\"").stripPrefix("\""))
+        // Test if this is a 'simple' query (i.e., needs to be wrapped in SELECT statement).
+        if (isSimpleQuery(strQuery)) {
+          val newQuery = wrapSimpleQuery(strQuery)
+          atPos(tree.pos.makeTransparent)(
+            // Reconstruct the tree with extended query.
+            q"SparqlHelper(StringContext.apply(..$newQuery)).sparql(..$r).asInstanceOf[List[${newTypeName(tpe)}]]"
+          )
+        }
+        // If not simple query extension was required, just set to generated query type and move on.
+        else {
+          atPos(tree.pos.makeTransparent)(
+            q"$orig.asInstanceOf[List[${newTypeName(tpe)}]]"
+          )
+        }
 
       case _ => super.transform(tree)
     }
