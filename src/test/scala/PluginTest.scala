@@ -18,76 +18,119 @@ class PluginTest extends FreeSpec {
       name in failure(testCase(test))
     })
 
-  //"[S] query types (no args)" in {
-  //  success(testCase("Test0",
-  //  """
-  //    | val x: List[`:Wine`] = sparql"SELECT ?x WHERE { ?x a :RedWine }"
-  //  """.stripMargin))
-  //}
+  "Query with arguments I" in {
+    success(testCase("test",
+    """
+        |val w: `:Wine` = iri"PeterMccoyChardonnay"
+        |val x1: List[`:Winery`] = sparql"PREFIX : <http://www.w3.org/TR/2003/PR-owl-guide-20031209/wine#> SELECT ?y WHERE { $w :hasMaker ?y }"
+    """.stripMargin))
+  }
 
-  "[S] query types (with args)" in {
-    success(testCase("Test0",
+  "Query with arguments II" in {
+    failure(testCase("test",
       """
-        | val s = ":WhiteWine"
-        | val x = sparql"SELECT ?x WHERE { ?x a $s }"
-        | val y: List[`:Wine`] = x
+        |val w: `:Winery` = iri"PeterMccoy"
+        |val x: List[`:Wine`] = sparql"PREFIX : <http://www.w3.org/TR/2003/PR-owl-guide-20031209/wine#> SELECT ?y WHERE { ?y :hasMaker $w }"
+    """.stripMargin))
+  }
+
+  "Query with arguments III" in {
+    success(testCase("test",
+      """
+        |val w: `:Winery` = iri"PeterMccoy"
+        |val x: List[`∃:hasMaker.:Winery`] = sparql"PREFIX : <http://www.w3.org/TR/2003/PR-owl-guide-20031209/wine#> SELECT ?y WHERE { ?y :hasMaker $w }"
       """.stripMargin))
   }
 
-  //"[S] isInstanceOf example" in {
-  //  success(testCase("Test0",
-  //    """
-  //      |val x: Any = iri"PeterMccoyChardonnay"
-  //      |if (x.isInstanceOf[`:WhiteWine`])
-  //      |  println("yup")
-  //    """.stripMargin))
-  ////   GENERATES
-  ////   ---------
-  ////   if ({
-  ////     val ThisIsNotAFreshName: de.uni_koblenz.dltypes.runtime.IRI = {
-  ////       scala.Predef.println("hi");
-  ////       de.uni_koblenz.dltypes.runtime.Sparql.IriHelper(scala.StringContext.apply("PeterMccoyChardonnay")).iri()
-  ////     };
-  ////     ThisIsNotAFreshName.isInstanceOf[de.uni_koblenz.dltypes.runtime.IRI].&&(ThisIsNotAFreshName.isSubsumed("$colonWhiteWine"))
-  ////   })
-  //}
+  "Query with Scala arguments (success)" in {
+    success(testCase("Test0",
+      """
+        |val w: `:Wine` = iri"PeterMccoyChardonnay"
+        |val i: Int = 1998
+        |val x = sparql"PREFIX : <http://www.w3.org/TR/2003/PR-owl-guide-20031209/wine#> SELECT ?y WHERE { $w :hasVintageYear ?y. ?y :yearValue $i }"
+        |val y: `:VintageYear` = x.head
+      """.stripMargin))
+  }
 
-  //"[S] type case example" in {
-  //  success(testCase("Test0",
-  //    """
-  //      |val a: Any = iri"PeterMccoyChardonnay"
-  //      |val redAllowed = true
-  //      |a match {
-  //      |  case i: Int => println("integer!")
-  //      |  case w: `:WhiteWine` =>
-  //      |    val g: `:Wine` = w
-  //      |    println("white wine")
-  //      |  case w: `:RedWine` if redAllowed => println("a red wine!")
-  //      |  case _: `:Wine` => println("a undisclosed white wine!")
-  //      |  case _ => println("don't know that thing")
-  //      |}
-  //    """.stripMargin))
-  ////   GENERATES
-  ////   ---------
-  ////   Main.this.a match {
-  ////     case (i @ (_: Int)) => scala.Predef.println("integer!")
-  ////     case (w @ (_: de.uni_koblenz.dltypes.runtime.IRI)) if w.isSubsumed("$colonWine") => scala.Predef.println("a wine!")
-  ////     case (w @ (_: de.uni_koblenz.dltypes.runtime.IRI)) if w.isSubsumed("$colonRedWine").&&(Main.this.redAllowed) => scala.Predef.println("a wine!")
-  ////     case _ => scala.Predef.println("don\'t know that thing")
-  ////   }
-  //}
+  "Query with Scala arguments (failure)" in {
+    failure(testCase("Test0",
+      """
+        |val w: `:Wine` = iri"PeterMccoyChardonnay"
+        |val i: String = "1998"
+        |val x = sparql"PREFIX : <http://www.w3.org/TR/2003/PR-owl-guide-20031209/wine#> SELECT ?y WHERE { $w :hasVintageYear ?y. ?y :yearValue $i }"
+      """.stripMargin))
+  }
 
-  //"[S] positive example" in {
-  //  success(testCase("Test0",
-  //    """
-  //      |val x: Int = 19
-  //    """.stripMargin))
-  //}
+  "Explicit inference (for lists)" in {
+    success(testCase("test",
+      """
+        |val rw: `:RedWine` = iri"PageMillWineryCabernetSauvignon"
+        |val ww: `:WhiteWine` = iri"PeterMccoyChardonnay"
+        |val ws = List[`???`](rw, ww)
+        |val ws2: List[`:Wine`] = ws
+      """.stripMargin))
+  }
 
-  //"[F] negative example" in {
-  //  failure(testCase("Test0",
-  //    """
-  //      |val x: Int = "nineteen"
-  //    """.stripMargin))
-  //}
+  "Explicit inference (for if)" in {
+    success(testCase("test",
+      """
+        |val p = 1 < 2
+        |val rw: `:RedWine` = iri"PageMillWineryCabernetSauvignon"
+        |val ww: `:WhiteWine` = iri"PeterMccoyChardonnay"
+        |val e: `???` = if (p) { rw } else { ww }
+        |val e2: `:Wine` = e
+    """.stripMargin))
+  }
+
+  "Runtime: Type Case" in {
+    success(testCase("test",
+      """
+        |val a: Any = iri"PeterMccoyChardonnay"
+        |val redAllowed = true
+        |a match {
+        |  case i: Int => println("integer!")
+        |  case w: `:WhiteWine` =>
+        |    val g: `:Wine` = w
+        |    println("white wine")
+        |  case w: `:RedWine` if redAllowed => println("a red wine!")
+        |  case _: `:Wine` => println("an undisclosed white wine!")
+        |  case _ => println("don't know that thing")
+        |}
+    """.stripMargin))
+    // GENERATES
+    // ---------
+    //Main.this.a match {
+    //  case (i @ (_: Int)) => scala.Predef.println("integer!")
+    //  case (x$1 @ (_: de.uni_koblenz.dltypes.runtime.IRI)) if x$1.isSubsumed("$colonWhiteWine") => {
+    //    val w: DLTypeDefs.:WhiteWine = x$1;
+    //    val g: DLTypeDefs.:Wine = w;
+    //    scala.Predef.println("white wine")
+    //  }
+    //  case (x$2 @ (_: de.uni_koblenz.dltypes.runtime.IRI)) if x$2.isSubsumed("$colonRedWine").&&(Main.this.redAllowed) => {
+    //    val w: DLTypeDefs.:RedWine = x$2;
+    //    scala.Predef.println("a red wine!")
+    //  }
+    //  case (x$3 @ (_: de.uni_koblenz.dltypes.runtime.IRI)) if x$3.isSubsumed("$colonWine") => scala.Predef.println("an undisclosed white wine!")
+    //  case _ => scala.Predef.println("don\'t know that thing")
+    //}
+    // ---------
+  }
+
+  "Runtime: instanceOf" in {
+    success(testCase("test",
+      """
+      |val x: Any = iri"PeterMccoyChardonnay"
+      |if (x.isInstanceOf[`:WhiteWine`])
+      |  println("always " + 19)
+    """.
+        stripMargin))
+    // GENERATES
+    // ---------
+    // if ({
+    // val x$1: Any = Main.this.x
+    // x$1.isInstanceof[de.uni_koblenz.dltypes.runtime.IRI).&&(x$1.asInstanceOf[de.uni_koblenz.runtime.IRI].isSubsumed("$colonWhiteWine"))
+    // })
+    //   scala.Predef.println("always".+(19))
+    // ---------
+  }
 }
