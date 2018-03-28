@@ -26,6 +26,7 @@ class CheckerAnalyzerPlugin(global: Global) {
 
     // Instantiate the DL parser.
     val parser = new Parser
+    val prettyPrinter = new PrettyPrinter
 
     val redOn = "\u001b[31m"
     val greenOn = "\u001b[32m"
@@ -127,7 +128,7 @@ class CheckerAnalyzerPlugin(global: Global) {
     // Print subsumed relationship in a very fancy manner.
     def formatSubsumed(dle: DLE): String = dle match {
       case Subsumed(l, r) =>
-        l.toString + " ⊏ " + r.toString
+        prettyPrinter.dleConcept(l) + " ⊏ " + prettyPrinter.dleConcept(r)
       case _ => ""
     }
 
