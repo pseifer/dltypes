@@ -101,16 +101,16 @@ class PluginTest extends FreeSpec {
     // ---------
     //Main.this.a match {
     //  case (i @ (_: Int)) => scala.Predef.println("integer!")
-    //  case (x$1 @ (_: de.uni_koblenz.dltypes.runtime.IRI)) if x$1.isSubsumed("$colonWhiteWine") => {
+    //  case (x$1 @ (_: de.uni_koblenz.dltypes.runtime.IRI)) if x$1.isSubsumed(de.uni_koblenz.dltypes.tools.Concept.apply(":WhiteWine")) => {
     //    val w: DLTypeDefs.:WhiteWine = x$1;
     //    val g: DLTypeDefs.:Wine = w;
     //    scala.Predef.println("white wine")
     //  }
-    //  case (x$2 @ (_: de.uni_koblenz.dltypes.runtime.IRI)) if x$2.isSubsumed("$colonRedWine").&&(Main.this.redAllowed) => {
+    //  case (x$2 @ (_: de.uni_koblenz.dltypes.runtime.IRI)) if x$2.isSubsumed(de.uni_koblenz.dltypes.tools.Concept.apply(":RedWine")).&&(Main.this.redAllowed) => {
     //    val w: DLTypeDefs.:RedWine = x$2;
     //    scala.Predef.println("a red wine!")
     //  }
-    //  case (x$3 @ (_: de.uni_koblenz.dltypes.runtime.IRI)) if x$3.isSubsumed("$colonWine") => scala.Predef.println("an undisclosed white wine!")
+    //  case (x$3 @ (_: de.uni_koblenz.dltypes.runtime.IRI)) if x$3.isSubsumed(de.uni_koblenz.dltypes.tools.Concept.apply(":Wine")) => scala.Predef.println("an undisclosed white wine!")
     //  case _ => scala.Predef.println("don\'t know that thing")
     //}
     // ---------
@@ -120,7 +120,7 @@ class PluginTest extends FreeSpec {
     success(testCase("test",
       """
       |val x: Any = iri"PeterMccoyChardonnay"
-      |if (x.isInstanceOf[`:WhiteWine`])
+      |if (x.isInstanceOf[`:RedWine | :WhiteWine`])
       |  println("always " + 19)
     """.
         stripMargin))
@@ -128,7 +128,10 @@ class PluginTest extends FreeSpec {
     // ---------
     // if ({
     // val x$1: Any = Main.this.x
-    // x$1.isInstanceof[de.uni_koblenz.dltypes.runtime.IRI).&&(x$1.asInstanceOf[de.uni_koblenz.runtime.IRI].isSubsumed("$colonWhiteWine"))
+    // x$1.isInstanceOf[de.uni_koblenz.dltypes.runtime.IRI].&&(x$1.asInstanceOf[de.uni_koblenz.dltypes.runtime.IRI].isSubsumed(
+    //   de.uni_koblenz.dltypes.tools.Union.apply(
+    //     de.uni_koblenz.dltypes.tools.Concept.apply(":RedWine"),
+    //     de.uni_koblenz.dltypes.tools.Concept.apply(":WhiteWine"))))
     // })
     //   scala.Predef.println("always".+(19))
     // ---------

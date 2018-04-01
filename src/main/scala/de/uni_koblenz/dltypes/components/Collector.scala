@@ -2,7 +2,7 @@ package de.uni_koblenz.dltypes
 package components
 
 import de.uni_koblenz.dltypes.backend.MyGlobal
-import de.uni_koblenz.dltypes.tools.PrettyPrinter
+import de.uni_koblenz.dltypes.tools._
 
 import scala.tools.nsc.ast.TreeDSL
 import scala.tools.nsc.Global
@@ -23,10 +23,68 @@ class Collector(val global: Global)
   override def newTransformer(unit: CompilationUnit): MyTransformer =
     new MyTransformer(unit)
 
+  // Provide DLEConcept and DLERole instances for the 'Liftable' type class.
+
+  private def recRoleLiftImpl(r: DLERole): Tree = {
+    r match {
+      case Role(r) => q"_root_.de.uni_koblenz.dltypes.tools.Role($r)"
+      case Inverse(r) =>
+        val t = recRoleLiftImpl(r)
+        q"_root_.de.uni_koblenz.dltypes.tools.Inverse($t)"
+      case Data(s) => q"_root_.de.uni_koblenz.dltypes.tools.Data($s)"
+    }
+  }
+
+  implicit val liftrole = Liftable[DLERole] { r =>
+    recRoleLiftImpl(r)
+  }
+
+  private def recDleLiftImpl(v: DLEConcept): Tree = {
+    v match {
+      case Variable(v) => q"_root_.de.uni_koblenz.dltypes.tools.Variable($v)"
+      case Type(t) => q"_root_.de.uni_koblenz.dltypes.tools.Type($t)"
+      case Top => q"_root_.de.uni_koblenz.dltypes.tools.Top"
+      case Bottom => q"_root_.de.uni_koblenz.dltypes.tools.Bottom"
+      case Nominal(n) => q"_root_.de.uni_koblenz.dltypes.tools.Nominal($n)"
+      case Concept(s) => q"_root_.de.uni_koblenz.dltypes.tools.Concept($s)"
+      case Existential(r, e) =>
+        val t = recDleLiftImpl(e)
+        q"_root_.de.uni_koblenz.dltypes.tools.Existential($r, $t)"
+      case Universal(r, e) =>
+        val t = recDleLiftImpl(e)
+        q"_root_.de.uni_koblenz.dltypes.tools.Universal($r, $t)"
+      case Negation(e) =>
+        val t = recDleLiftImpl(e)
+        q"_root_.de.uni_koblenz.dltypes.tools.Negation($t)"
+      case Intersection(l, r) =>
+        val t1 = recDleLiftImpl(l)
+        val t2 = recDleLiftImpl(r)
+        q"_root_.de.uni_koblenz.dltypes.tools.Intersection($t1, $t2)"
+      case Union(l, r) =>
+        val t1 = recDleLiftImpl(l)
+        val t2 = recDleLiftImpl(r)
+        q"_root_.de.uni_koblenz.dltypes.tools.Union($t1, $t2)"
+    }
+  }
+
+  implicit val liftdle = Liftable[DLEConcept] { v =>
+    recDleLiftImpl(v)
+  }
+
   class MyTransformer(unit: CompilationUnit) extends TypingTransformer(unit) with Extractor {
     val global: Collector.this.global.type = Collector.this.global
 
+    val parser = new Parser
     val pp = new PrettyPrinter
+
+    def parseDL(tpt: String, tree: Tree): DLEConcept = {
+      parser.parse(parser.dlexpr, Util.decode(tpt)) match {
+        case parser.Success(m, _) => m.asInstanceOf[DLEConcept]
+        case parser.NoSuccess(s, msg) =>
+          reporter.error(tree.pos, s"[DL] instanceOf with invalid DL type: $s")
+          Bottom
+      }
+    }
 
     /* Find cases where matching is done on DLType and add isSubsumed runtime checks.
     Rewrite:
@@ -54,7 +112,7 @@ class Collector(val global: Global)
       case _: Int => <body5>
       case _ => <body6>
     }*/
-    def transformCases(c: CaseDef): Tree = {
+    def transformCases(tree: Tree, c: CaseDef): Tree = {
       c match {
         // case x: `:RedWine` [if <guard>]* => <body>
         // (note that desugared ==)
@@ -62,11 +120,11 @@ class Collector(val global: Global)
         case CaseDef(Bind(name, Typed(Ident(termNames.WILDCARD), t @ DLType(tpt))), guard, body) =>
           val fresh = currentUnit.freshTermName()
           if (guard.isEmpty)
-            cq"""$fresh: IRI if ${fresh.toTermName}.isSubsumed($tpt) => {
+            cq"""$fresh: IRI if ${fresh.toTermName}.isSubsumed(${parseDL(tpt, tree)}) => {
                    val ${name.toTermName}: $t = $fresh;
                    ..$body }"""
           else
-            cq"""$fresh: IRI if ${fresh.toTermName}.isSubsumed($tpt) && ($guard) => {
+            cq"""$fresh: IRI if ${fresh.toTermName}.isSubsumed(${parseDL(tpt, tree)}) && ($guard) => {
                    val ${name.toTermName}: $t = $fresh;
                    ..$body }"""
 
@@ -77,9 +135,9 @@ class Collector(val global: Global)
           // Introduce fresh name, so isSubsumed check can be performed in guard.
           val name = currentUnit.freshTermName()
           if (guard.isEmpty)
-            cq"$name: IRI if $name.isSubsumed($tpt) => $body"
+            cq"$name: IRI if $name.isSubsumed(${parseDL(tpt, tree)}) => $body"
           else
-            cq"$name: IRI if $name.isSubsumed($tpt) && ($guard) => $body"
+            cq"$name: IRI if $name.isSubsumed(${parseDL(tpt, tree)}) && ($guard) => $body"
 
         // Otherwise, we don't care.
         case _ => c
@@ -127,8 +185,7 @@ class Collector(val global: Global)
           super.transform(tree)
         }
         else {
-          reporter.echo("IS EMPTY")
-          val newCs = cases.map(transformCases)
+          val newCs = cases.map(transformCases(tree, _))
           super.transform(tree)
           atPos(tree.pos.makeTransparent)(
             q"$l match { case ..$newCs }"
@@ -147,11 +204,11 @@ class Collector(val global: Global)
       case TypeApply(Select(q, name), List(DLType(tpt))) if name.toString == "isInstanceOf" =>
         // Generate fresh name.
         val fresh1 = currentUnit.freshTermName()
-        // TODO: Check if tpt can be parsed, raise error if not.
+
         atPos(tree.pos.makeTransparent)(
           q"""{ val $fresh1: Any = $q;
                 $fresh1.isInstanceOf[IRI] &&
-                  $fresh1.asInstanceOf[IRI].isSubsumed($tpt);
+                  $fresh1.asInstanceOf[IRI].isSubsumed(${parseDL(tpt, tree)});
               }"""
         )
 
