@@ -245,6 +245,19 @@ class Collector(val global: Global)
           )
         }
 
+      // Match role projections.
+      case Select(Ident(t), DLSelect(n)) =>
+        // TODO: This should generate a strict query. Change this, when strict queries are implemented.
+        // Generate new type for this query
+        val tpe = MyGlobal.newSparqlQueryType()
+        // Generate the projection query.
+        // TODO: Remove PREFIX part when internal prefix stuff is fixed!
+        val newQuery = List("PREFIX : <http://www.w3.org/TR/2003/PR-owl-guide-20031209/wine#> SELECT ?a WHERE {", s"${Util.decode(n)} ?a}")
+        // Generate SPARQL query.
+        atPos(tree.pos.makeTransparent)(
+          q"SparqlHelper(StringContext.apply(..$newQuery)).sparql(${t.toTermName}).asInstanceOf[List[${newTypeName(tpe)}]]"
+        )
+
       case _ => super.transform(tree)
     }
   }

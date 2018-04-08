@@ -18,6 +18,15 @@ class PluginTest extends FreeSpec {
       name in failure(testCase(test))
     })
 
+
+  "TEST" in {
+    success(testCase("test",
+    """
+      |val p = iri"PeterMccoyChardonnay"
+      |val x: List[`:Winery`] = p.`:hasMaker`
+    """.stripMargin))
+  }
+
   "Query with arguments I" in {
     success(testCase("test",
     """

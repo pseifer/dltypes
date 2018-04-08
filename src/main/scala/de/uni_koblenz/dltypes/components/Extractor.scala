@@ -7,20 +7,28 @@ trait Extractor {
   val global: SymbolTable
   import global._
 
+  private val h_char =
+    List("$colon", "$hash",
+      "$u22A4", "$bar",
+      "$amp", "$bang",
+      "$u2200", "$u2203",
+      "$u00AC", "$u22A5")
+  private def isDLTypeHeuristic(s: String): Boolean = h_char.exists(s.contains)
+
   // Match DL type identifier against Tree and return String.
   object DLType {
-    val h_char =
-      List("$colon", "$hash",
-        "$u22A4", "$bar",
-        "$amp", "$bang",
-        "$u2200", "$u2203",
-        "$u00AC", "$u22A5")
-    def isDLTypeHeuristic(s: String): Boolean = h_char.exists(s.contains)
-
     def unapply(tree: Tree): Option[String] = tree match {
       case Ident(n) if isDLTypeHeuristic(n.toString) => Some(n.toString)
       case _ => None
     }
+  }
+
+  object DLSelect {
+    def unapply(n: Name): Option[String] =
+      if (isDLTypeHeuristic(n.toString))
+        Some(n.toString)
+      else
+        None
   }
 
   object DLInference {
