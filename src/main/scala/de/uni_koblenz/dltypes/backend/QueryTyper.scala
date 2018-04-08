@@ -38,7 +38,7 @@ class QueryTyper(val reasoner: Reasoner) {
       "String" -> "xsd:string"
     )
 
-  def run(queryParts: List[String], arguments: List[Either[String, DLEConcept]]): Try[List[DLEConcept]] = {
+  def run(queryParts: List[String], arguments: List[Either[String, DLEConcept]], strict: Boolean): Try[List[DLEConcept]] = {
     var placeholders: Map[Variable, DLEConcept] = Map()
     val query =
       if (arguments.isEmpty && !queryParts.isEmpty)
@@ -64,7 +64,7 @@ class QueryTyper(val reasoner: Reasoner) {
     val parsed = parser.parse(query)
     parsed.flatMap {
       case AskQuery(_, _) => throw new NotImplementedError // TODO: boolean
-      case SelectQuery(_, vs, qe) => evaluator.eval(vs, qe, placeholders)
+      case SelectQuery(_, vs, qe) => evaluator.eval(vs, qe, placeholders, strict)
     }
   }
 }

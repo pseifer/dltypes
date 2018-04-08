@@ -100,6 +100,8 @@ class Evaluator(val reasoner: Reasoner) {
 
   @throws(classOf[FaultyQueryExpressionError])
   private def qexprToCS(qexpr: QueryExpression): CS = { qexpr match {
+      // TODO: ConceptAssertion(placeholder, ?y) (e.g. $w a ?y)  !!!
+      // Basically ConceptAssertion with two variables.
     case ConceptAssertion(Var(x), Iri(i)) => ConceptConstraint(Variable(x), Concept(i))
     case ConceptAssertion(Var(x), TypedValue(_, Iri(i))) => LiteralConstraint(Variable(x), Type(i))
     case RoleAssertion(Var(x), Iri(b), Iri(r)) => RoleConstraint(Variable(x), Role(r), Nominal(b))
@@ -148,13 +150,16 @@ class Evaluator(val reasoner: Reasoner) {
     go(cs.map { case (v,c) => v -> selfToTop(v, simplify(c)) })
   }
 
-  def eval(vs: Seq[Var], qe: QueryExpression, placeholders: ConstraintMap): Try[List[DLEConcept]] =
+  def eval(vs: Seq[Var],
+           qe: QueryExpression,
+           placeholders: ConstraintMap,
+           strict: Boolean): Try[List[DLEConcept]] =
     Try {
       val cs = qexprToCS(qe)    // build up constraint sets
       val constraints = cs.get  // evaluate constraints
 
       val res =
-        if (MyGlobal.strictQueryTyping) {
+        if (strict || MyGlobal.strictQueryTyping) {
           // First Pass: Resolve constraints with placeholders.
           val before = resolve(constraints)
 

@@ -225,7 +225,8 @@ class Collector(val global: Global)
       // Match the application of StringContext(<query>).sparql
       // (i.e., sparql"" literals).
       case orig @ Apply(Select(Apply(obj, query), m), r)
-        if m.toString == "sparql" && obj.toString == "StringContext" =>
+        if (m.toString == "sparql" || m.toString == "strictsparql")
+          && obj.toString == "StringContext" =>
         // Generate the new type for this query.
         val tpe = MyGlobal.newSparqlQueryType()
         // Transform query tree to String.
@@ -235,7 +236,10 @@ class Collector(val global: Global)
           val newQuery = wrapSimpleQuery(strQuery)
           atPos(tree.pos.makeTransparent)(
             // Reconstruct the tree with extended query.
-            q"SparqlHelper(StringContext.apply(..$newQuery)).sparql(..$r).asInstanceOf[List[${newTypeName(tpe)}]]"
+            if (m.toString == "sparql")
+              q"SparqlHelper(StringContext.apply(..$newQuery)).sparql(..$r).asInstanceOf[List[${newTypeName(tpe)}]]"
+            else
+              q"SparqlHelper(StringContext.apply(..$newQuery)).strictsparql(..$r).asInstanceOf[List[${newTypeName(tpe)}]]"
           )
         }
         // If not simple query extension was required, just set to generated query type and move on.
@@ -255,7 +259,7 @@ class Collector(val global: Global)
         val newQuery = List("PREFIX : <http://www.w3.org/TR/2003/PR-owl-guide-20031209/wine#> SELECT ?a WHERE {", s"${Util.decode(n)} ?a}")
         // Generate SPARQL query.
         atPos(tree.pos.makeTransparent)(
-          q"SparqlHelper(StringContext.apply(..$newQuery)).sparql(${t.toTermName}).asInstanceOf[List[${newTypeName(tpe)}]]"
+          q"SparqlHelper(StringContext.apply(..$newQuery)).strictsparql(${t.toTermName}).asInstanceOf[List[${newTypeName(tpe)}]]"
         )
 
       case _ => super.transform(tree)

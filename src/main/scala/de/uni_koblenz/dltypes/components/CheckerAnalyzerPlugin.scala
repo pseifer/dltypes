@@ -232,42 +232,42 @@ class CheckerAnalyzerPlugin(global: Global) {
         val ptArgs = getTypeArgs(pt)
 
         // Definition of SPARQL query.
-        if (isQueryDef(tpe)) tree match {
-        //reporter.echo("TPE " + tpe.toString + tpe.kind)
-        //reporter.echo(tpe.resultType.toString)
-        //reporter.echo("TP " + pt.toString)
-        //reporter.echo(tree.toString + "\n\n\n")
-          // The case where SparqlQueryTypeX has to be extracted.
-          //                                       SparqlHelper  apply             sparql           instanceOf
-          case TypeApply(Select(Apply(Select(Apply(_, List(Apply(_, queryParts))), _), sparqlArgs), _), List(sqt)) =>
-            val uSqt = sqt.toString.split('.').last.dropRight(1) // TODO: This too hacky.
-            //reporter.echo("queryParts " + queryParts)
-            //reporter.echo("sparqlArgs " + sparqlArgs)
-            //reporter.echo("  " + sparqlArgs.)
-            //reporter.echo("  " + sparqlArgs.head.tpe)
-            //reporter.echo("SparqlQueryTypeX " + uSqt)
-            //reporter.echo("Registered as " + MyGlobal.qtypeTable(uSqt).toString)
-            // Calculate type for query.
-            qtyper.run(
+        if (isQueryDef(tpe)) {
+
+          tree match {
+            // The case where SparqlQueryTypeX has to be extracted.
+            case TypeApply(
+                  Select(Apply(Select(Apply(r1, List(Apply(_/*apply*/, queryParts))), r3), sparqlArgs), _/*instanceOf*/),
+                  List(sqt))
+              if (r1.symbol.decodedName == "SparqlHelper"
+                && (r3.toString == "sparql") || (r3.toString == "strictsparql")) =>
+
+              val uSqt = sqt.toString.split('.').last.dropRight(1) // TODO: This too hacky.
+              val isStrict = r3.toString == "strictsparql"
+
+              // Calculate type for query.
+              qtyper.run(
                 queryParts.map(_.toString.stripPrefix("\"").stripSuffix("\"")),
                 sparqlArgs.map { x =>
-                    if (isDLType(x.tpe)) {
-                      parseDL(x.tpe) match {
-                        case UtilSuccess(t) if t.size == 1 => Right(t.head)
-                        case UtilFailure(e) =>
-                          reporter.error(tree.pos, "[DL] Type Parse error (in SPARQL argument): " + e.getMessage)
-                          Right(Bottom)
-                      }
+                  if (isDLType(x.tpe)) {
+                    parseDL(x.tpe) match {
+                      case UtilSuccess(t) if t.size == 1 => Right(t.head)
+                      case UtilFailure(e) =>
+                        reporter.error(tree.pos, "[DL] Type Parse error (in SPARQL argument): " + e.getMessage)
+                        Right(Bottom)
                     }
-                    else
-                      Left(x.tpe.toString)
-                }) match {
-               // sparqlArgs.map(_.tpe.toString))
-              case UtilFailure(e) => reporter.error(tree.pos, s"[DL] SPARQL error: ${e.getMessage} ($e)")
-              case UtilSuccess(x) => MyGlobal.qtypeTable.update(uSqt, Some(x))
-            }
-          // In other cases, fall through and perform the type check.
-          case _ => Unit
+                  }
+                  else
+                    Left(x.tpe.toString)
+                },
+                isStrict) match {
+                // sparqlArgs.map(_.tpe.toString))
+                case UtilFailure(e) => reporter.error(tree.pos, s"[DL] SPARQL error: ${e.getMessage} ($e)")
+                case UtilSuccess(x) => MyGlobal.qtypeTable.update(uSqt, Some(x))
+              }
+            // In other cases, fall through and perform the type check.
+            case _ => Unit
+          }
         }
 
         // Cases were DLType is inferred (or explicitly used) need to be declared
