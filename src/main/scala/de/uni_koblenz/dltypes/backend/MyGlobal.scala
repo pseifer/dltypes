@@ -22,6 +22,11 @@ object MyGlobal {
       c += 1
       s"InferredDLType$c"
     }
+
+    def freshD(): String = {
+      c += 1
+      s"RegisteredDLType$c"
+    }
   }
 
   // Generate and register a new SPARQL query type (placeholder).
@@ -32,11 +37,18 @@ object MyGlobal {
     t
   }
 
+  // Generate and register a new DL type.
+  def newDLType(dl: DLEConcept): String = {
+    val t = Gensym.freshD()
+    symbolTable += t
+    dtypeTable += t -> dl
+    t
+  }
+
   // Generate and register a new inferred DL type (placeholder).
   def newInferredDLType(): String = {
     val t = Gensym.freshI()
     symbolTable += t
-    itypeTable += t -> (None, Nil)
     itypeTable += t -> (None, Nil)
     t
   }
@@ -60,6 +72,9 @@ object MyGlobal {
   // This gets initialized with None values when the type is generated and set
   // to the DLEConcept when the query is typed.
   val qtypeTable: mutable.Map[String, Option[List[DLEConcept]]] = mutable.Map()
+
+  // TODO: Description
+  val dtypeTable:  mutable.Map[String, DLEConcept] = mutable.Map()
 
   // Similar to qtypeTable, but for types that request explicitly to infer DL type
   // via the `???` constant.

@@ -7,7 +7,7 @@ class PluginTest extends FreeSpec {
 
   // Run all tests in "Tests.md".
   parse("Tests.md")
-    .filterCategory("<none>")
+    //.filterCategory("<none>")
     .onlyFor(Success, { (name, test) =>
       name in success(testCase(test))
     })
@@ -18,12 +18,37 @@ class PluginTest extends FreeSpec {
       name in failure(testCase(test))
     })
 
-
-  "TEST" in {
+  "Role projection" in {
     success(testCase("test",
     """
       |val p = iri"PeterMccoyChardonnay"
       |val x: List[`:Winery`] = p.`:hasMaker`
+    """.stripMargin))
+  }
+
+  "Strict query" in {
+    success(testCase("test",
+    """
+      |val p = iri"PeterMccoyChardonnay"
+      |val x: List[`:Winery`] = strictsparql"PREFIX : <http://www.w3.org/TR/2003/PR-owl-guide-20031209/wine#> SELECT ?y WHERE { $p :hasMaker ?y }"
+    """.stripMargin))
+  }
+
+  "Equality (warn)" in {
+    success(testCase("test",
+      """
+        |val rw: `:RedWine` = iri"PageMillWineryCabernetSauvignon"
+        |val ww: `:WhiteWine` = iri"PeterMccoyChardonnay"
+        |val p1 = rw == ww
+      """.stripMargin))
+  }
+
+  "Equality (ok)" in {
+    success(testCase("test",
+    """
+      |val rw: `:RedWine` = iri"PageMillWineryCabernetSauvignon"
+      |val ww: `:Wine` = iri"PeterMccoyChardonnay"
+      |val p1 = rw == ww
     """.stripMargin))
   }
 

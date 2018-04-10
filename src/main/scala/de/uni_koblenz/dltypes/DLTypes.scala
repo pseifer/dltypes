@@ -38,6 +38,7 @@ class DLTypes (override val global: Global) extends Plugin {
   new CheckerAnalyzerPlugin(global).add(printchecks=true, debug=true)
 
   override val components: List[PluginComponent] =
+    new TypecaseTransformer(global) ::
     new Collector(global) ::
     new Typedef(global) ::
     Nil

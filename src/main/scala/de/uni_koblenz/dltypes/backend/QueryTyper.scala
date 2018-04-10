@@ -33,6 +33,7 @@ class QueryTyper(val reasoner: Reasoner) {
   private val typeMap: Map[String, String] =
     Map(
       "Int" -> "xsd:integer",
+      "Float" -> "xsd:float",
       "Double" -> "xsd:double",
       "Boolean" -> "xsd:boolean",
       "String" -> "xsd:string"

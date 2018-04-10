@@ -55,29 +55,40 @@ class CheckerAnalyzerPlugin(global: Global) {
     // Attempt to parse the DLEConcept representation of an DL type.
     def parseDL(tpe: Type): UtilTry[List[DLEConcept]] = {
       if (isQueryType(tpe))
-        MyGlobal.qtypeTable.getOrElse(stripQueryType(tpe), None) match {
+        MyGlobal.qtypeTable.getOrElse(stripT(tpe), None) match {
           case Some(t) => UtilSuccess(t)
           case None => UtilFailure(new Exception(
             s"[DL] Internal Error: Encountered unseen internal query type $tpe"))
         }
         // TODO: else if (isAnnotatedQueryType) return List parsed from declared type
       else if (isInferredDL(tpe))
-        MyGlobal.itypeTable.getOrElse(stripInferredType(tpe), (None, Nil)) match {
+        MyGlobal.itypeTable.getOrElse(stripT(tpe), (None, Nil)) match {
           case (Some(t), _) => UtilSuccess(t)
           case (None, Nil) => UtilFailure(new Exception(
             s"[DL] Internal Error: Encountered unseen (explicit) inferred DL type $tpe"))
           case (None, lst) =>
             val us = DLEConcept.simplify(lst.foldLeft(Bottom: DLEConcept)(Union: (DLEConcept, DLEConcept) => DLEConcept))
-            MyGlobal.itypeTable += stripInferredType(tpe) -> (Some(List(us)), Nil)
+            MyGlobal.itypeTable += stripT(tpe) -> (Some(List(us)), Nil)
             UtilSuccess(List(us))
         }
-      else {
-        val s = dlTypeName(tpe)
-        parser.parse(parser.dlexpr, s) match {
-          case parser.Success(m, _) => UtilSuccess(List(m.asInstanceOf[DLEConcept]))
-          case parser.NoSuccess(msg, _) => UtilFailure(new Exception(msg))
+      else if (isRegisteredDLType(tpe))
+        MyGlobal.dtypeTable.get(stripT(tpe)) match {
+          case Some(t) => UtilSuccess(List(t))
+          case None => UtilFailure(new Exception(
+            s"[DL] Internal Error: Encountered unseen DL type $tpe"
+          ))
         }
-      }
+      else
+        UtilFailure(new Exception(
+          "[DL] Internal Error: DL type is not DL type."
+        ))
+      //else {
+      //  val s = dlTypeName(tpe)
+      //  parser.parse(parser.dlexpr, s) match {
+      //    case parser.Success(m, _) => UtilSuccess(List(m.asInstanceOf[DLEConcept]))
+      //    case parser.NoSuccess(msg, _) => UtilFailure(new Exception(msg))
+      //  }
+      //}
     }
 
     // Test whether tpe is indeed a DL type.
@@ -88,20 +99,15 @@ class CheckerAnalyzerPlugin(global: Global) {
       tpe.toString != "de.uni_koblenz.dltypes.runtime.DLType"
     }
 
-    def stripQueryType(tpe: Type): String =
+    def stripT(tpe: Type): String =
       tpe.toString.split('.').last
 
-    def stripInferredType(tpe: Type): String =
-      tpe.toString.split('.').last
+    def isSomeDLType(tpe: Type, specific: String): Boolean =
+      isDLType(tpe) && stripT(tpe).startsWith(specific)
 
-    // Test whether tpe is a sparql query type placeholder.
-    def isQueryType(tpe: Type): Boolean = {
-      isDLType(tpe) && stripQueryType(tpe).startsWith("SparqlQueryType")
-    }
-
-    def isInferredDL(tpe: Type): Boolean = {
-      isDLType(tpe) && stripInferredType(tpe).startsWith("InferredDLType")
-    }
+    def isQueryType(tpe: Type): Boolean = isSomeDLType(tpe, "SparqlQueryType")
+    def isInferredDL(tpe: Type): Boolean = isSomeDLType(tpe, "InferredDLType")
+    def isRegisteredDLType(tpe: Type): Boolean = isSomeDLType(tpe, "RegisteredDLType")
 
     def isQueryDef(tpe: Type): Boolean = {
       tpe.kind == "NullaryMethodType" &&
@@ -129,6 +135,8 @@ class CheckerAnalyzerPlugin(global: Global) {
     def formatSubsumed(dle: DLE): String = dle match {
       case Subsumed(l, r) =>
         prettyPrinter.dleConcept(l) + " ⊏ " + prettyPrinter.dleConcept(r)
+      case ConceptEquality(l, r) =>
+        prettyPrinter.dleConcept(l) + " ≡ " + prettyPrinter.dleConcept(r)
       case _ => ""
     }
 
@@ -153,21 +161,12 @@ class CheckerAnalyzerPlugin(global: Global) {
           case UtilFailure(e) =>
             reporter.error(tree.pos, "[DL] Type Parse Error: " + e.getMessage)
           case UtilSuccess(t) =>
-            MyGlobal.itypeTable.getOrElse(stripInferredType(pt), (None, Nil)) match {
-              case (None, xs) => MyGlobal.itypeTable += stripInferredType(pt) -> (None, xs ++ List(t.head)) // TODO: What if more than one? Query types? Impossible?
+            MyGlobal.itypeTable.getOrElse(stripT(pt), (None, Nil)) match {
+              case (None, xs) => MyGlobal.itypeTable += stripT(pt) -> (None, xs ++ List(t.head)) // TODO: What if more than one? Query types? Impossible?
               case _ => Unit
             }
         }
-        //MyGlobal.itypeTable.update
-        //reporter.echo("TPE < " + tpe + " >")
-        //reporter.echo("---\n" + tree + "\n---\n")
       }
-      //if (isInferredDL(tpe)) {
-      //  reporter.echo("+++++ TPE +++++ < " + tpe + " >")
-      //  reporter.echo("PT < " + pt + " >")
-      //  reporter.echo("---\n" + tree + "\n---\n")
-      //}
-
       // If both are DL types, do subsumed(tpe, pt) check.
       else if (isDLType(tpe) && isDLType(pt)) {
         parseDL(tpe).flatMap { dltpe =>
@@ -190,7 +189,7 @@ class CheckerAnalyzerPlugin(global: Global) {
         }
       } match {
         case UtilFailure(e) =>
-          reporter.error(tree.pos, "[DL] Type Parse Error: " + e.getMessage)
+          reporter.error(tree.pos, e.getMessage)
         case UtilSuccess(rs) =>
           rs.foreach { case (test, b) =>
             if (!b) {
@@ -231,8 +230,49 @@ class CheckerAnalyzerPlugin(global: Global) {
         val tpeArgs = getTypeArgs(tpe)
         val ptArgs = getTypeArgs(pt)
 
+        // Might be equality check.
+        if (tpe == typeOf[Boolean]) {
+          // Check if '==' and both sides are DL type.
+          tree match {
+
+            case Apply(Select(l, eqeq), List(r))
+              if eqeq.decodedName.toString == "=="
+                 && isDLType(l.tpe)
+                 && isDLType(r.tpe) =>
+              val lhs = l.symbol.tpe.resultType
+              val rhs = r.symbol.tpe.resultType
+              parseDL(lhs).flatMap { lhsDL =>
+                parseDL(rhs).map { rhsDL =>
+                  if (lhsDL.size != 1 || rhsDL.size != 1)
+                    reporter.warning(tree.pos, "[DL] Can't check if query equality type is correct.")
+                  else {
+                    val test = ConceptEquality(Intersection(lhsDL.head, rhsDL.head), Bottom)
+                    val result = reasoner.prove(test)
+                    if (result)
+                      reporter.warning(tree.pos, "[DL] comparing values of these DL types will always yield false.")
+                  }
+                }
+              }
+            case _ => Unit
+          }
+        }
+
         // Definition of SPARQL query.
         if (isQueryDef(tpe)) {
+
+          //val t = q"??? : SparqlQueryType1"
+          //val tt = newTypeName("SparqlQueryType1")
+          //val selectedType = "SparqlQueryType1"
+          //val tt = typer.typed(t)
+
+
+          //reporter.echo(global.lookupTypeName("SparqlQueryType1".toCharArray).toString)
+          //val zzz = global.lookupTypeName("SparqlQueryType1".toCharArray)
+          //   val n = k.callsiteTyper.typed(q"??? : Foo").tpe.typeSymbol.fullName
+
+          //reporter.echo("t tree " + t)
+          //reporter.echo("tt tree " + tt + " " + tt.isTyped)
+          //reporter.echo("type " + tt.tpe)
 
           tree match {
             // The case where SparqlQueryTypeX has to be extracted.
