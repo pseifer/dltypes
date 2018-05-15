@@ -13,7 +13,7 @@ class EvaluatorTest extends FreeSpec {
 
   "all" in {
     // No variables requested:
-    val cs = uator.eval(Nil, q1, Map())
+    val cs = uator.eval(Nil, q1, Map(), strict = false)
     println(cs)
     assert(cs == List(
       Intersection(Existential(Inverse(Role(":knows")),Existential(Role(":knows"),Top)),Concept(":Researcher")),

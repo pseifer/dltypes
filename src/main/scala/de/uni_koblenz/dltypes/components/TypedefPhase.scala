@@ -9,7 +9,7 @@ import scala.tools.nsc.transform.{Transform, TypingTransformers}
 import scala.tools.nsc.ast.TreeDSL
 
 
-class Typedef(val global: Global)
+class TypedefPhase(val global: Global)
   extends PluginComponent with Transform with TypingTransformers with TreeDSL {
   import global._
 
@@ -21,13 +21,14 @@ class Typedef(val global: Global)
     new MyTransformer(unit)
 
   class MyTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
-    val global: Typedef.this.global.type = Typedef.this.global
+    val global: TypedefPhase.this.global.type = TypedefPhase.this.global
 
     val dlPackageInsert =
       q"import de.uni_koblenz.dltypes.runtime._" ::
       q"import de.uni_koblenz.dltypes.runtime.Sparql._" ::
       MyGlobal.symbolTable.map { x =>
         q"type ${newTypeName(x)} = DLType"
+        //q"class ${newTypeName(x)} extends DLType"
       }.toList
 
     val dlModuleName = "DLTypeDefs"

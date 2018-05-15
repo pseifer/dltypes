@@ -12,14 +12,27 @@ class DLTypes (override val global: Global) extends Plugin {
   override val description: String = "Typed integration of SPARQL queries into the Scala programming language."
 
   override def init(options: List[String], error: String => Unit): Boolean = {
+    var success: Boolean = true
+    // ONTOLOGY
     options.find(_.startsWith("ontology:")) match {
       case Some(option) =>
-        MyGlobal.ontologies += ":" -> option.drop("ontology:".length)
-        true
+        //MyGlobal.ontologies += ":" -> option.drop("ontology:".length)
+        MyGlobal.ontology = option.drop("ontology:".length)
+        success = true
       case _ =>
         error("-P:dltypes:ontology not specified")
-        false
+        success = false
     }
+    // PREFIX
+    options.find(_.startsWith("prefix:")) match {
+      case Some(option) =>
+        MyGlobal.prefixes += ":" -> option.drop("prefix:".length)
+        success = true
+      case _ =>
+        error("-P:dltypes:ontology not specified")
+        success = false
+    }
+    success
   }
 
   // TODO:
@@ -33,13 +46,15 @@ class DLTypes (override val global: Global) extends Plugin {
 
   // Plugin that can be used to report things happening to AnalyzerPlugin callbacks.
   //new EchoAnalyzerPlugin(global, List("pluginsTyped", "pluginsPt")).addToPhase("typer")
+  //new EchoAnalyzerPlugin(global, List("pluginsNotifyImplicitSearch", "pluginsNotifyImplicitSearchResult")).addToPhase("typer")
+  //new EchoAnalyzerPlugin(global, List("pluginsTypeSig")).addToPhase("typer")
 
   // Plugin that checks DL types in the typer phase.
   new CheckerAnalyzerPlugin(global).add(printchecks=true, debug=true)
 
   override val components: List[PluginComponent] =
-    new TypecaseTransformer(global) ::
-    new Collector(global) ::
-    new Typedef(global) ::
+    new TypecaseTransformationPhase(global) ::
+    new CollectorPhase(global) ::
+    new TypedefPhase(global) ::
     Nil
 }

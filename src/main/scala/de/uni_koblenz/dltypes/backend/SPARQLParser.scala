@@ -1,11 +1,11 @@
 package de.uni_koblenz.dltypes
 package backend
 
-import org.openrdf.query.algebra.{Projection, ProjectionElem, ProjectionElemList}
+import de.uni_koblenz.dltypes.backend.DLTypesError.EitherDL
+import org.openrdf.query.algebra.Projection
 import org.openrdf.query.algebra.helpers.AbstractQueryModelVisitor
 import org.openrdf.query.parser.sparql.{SPARQLParser => ORDFParser}
 
-import scala.collection.mutable
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
 
@@ -22,24 +22,26 @@ class SPARQLParser {
 
   // InvalidSPARQLError   if the query can not be parsed.
   // NotTypeableError     if the query is valid, but can't be typed.
-  def parse(query: String): Try[SPARQLQuery] = {
-    val qs = Try(ordfp.parseQuery(query, baseUri))
-      .transform(s => Success(s), e => Failure(new InvalidSPARQLError(e.getMessage)))
+  def parse(query: String): EitherDL[SPARQLQuery] = {
+    val qs = Try(ordfp.parseQuery(query, baseUri)) match {
+      case Success(s) => Right(s)
+      case Failure(e) => Left(SPARQLError("Unable to parse query, because: " + e.getMessage))
+    }
     val visitor = new ParseVisitor
-    Try {
-      println(qs.get)
-      qs.get.getTupleExpr.visit(visitor)
-      val vs = qs.get.getTupleExpr.getBindingNames.iterator.asScala.toList.map(Var)
-      println(vs)
-      val qe = visitor.getQueryExpression()
-      visitor.getQType() match {
-        case Ask => AskQuery(Nil, qe)
+
+    qs.flatMap { q =>
+      q.getTupleExpr.visit(visitor)
+      val vs = q.getTupleExpr.getBindingNames.iterator.asScala.toList.map(Var)
+      visitor.getQueryExpression.flatMap { qe =>
+        visitor.getQType.flatMap {
+          case Ask => Right(AskQuery(Nil, qe))
           // TODO: vs returns a list of all variables. However, if SELECT * is used,
           // this should be empty list instead. At some point, need to check if
           // vs contains all the variables.
           // Also contains vars in order of occurrence (for * cases) which is different
           // from evaluator, which used alphabetical order.
-        case Select => SelectQuery(Nil, vs, qe)
+          case Select => Right(SelectQuery(Nil, vs, qe))
+        }
       }
     }
   }
@@ -55,21 +57,22 @@ class SPARQLParser {
     private var errorFlag: Option[String] = None
     private var qtype: Option[QType] = None
 
-    def getQueryExpression(): QueryExpression = {
+    def getQueryExpression: EitherDL[QueryExpression] = {
       // If not exactly one, something is wrong.
       if (errorFlag.isDefined)
-        throw new NotTypeableError(s"Expression in query can't be typed: ${errorFlag.get}")
+        Left(InferenceError(s"Query can not be typed: ${errorFlag.get}"))
       else if (qstack.size != 1)
-        throw new NotTypeableError("Error in syntax tree construction.")
+        Left(InferenceError("Query can not be typed: Error in syntax tree construction."))
       else
-        return qstack.head
+        Right(qstack.head)
     }
 
-    def getQType(): QType = {
+    def getQType: EitherDL[QType] = {
       qtype match {
         case None =>
-          throw new NotTypeableError("Can only type SELECT or ASK queries.")
-        case Some(q) => q
+          Left(InferenceError("Can only infer types for SELECT and ASK queries."))
+        case Some(q) =>
+          Right(q)
       }
     }
 
@@ -121,46 +124,6 @@ class SPARQLParser {
     }
   }
 }
-
-
-/* old parser
-import scala.util.parsing.combinator._
-class SPARQLParser extends RegexParsers {
-  // Query parser
-  def query: Parser[SPARQLQuery] = prologue ~ queryPart ^^ { case p ~ q => q match {
-    case AskQuery(_, qexpr) => AskQuery(p, qexpr)
-    case SelectQuery(_, vars, qexpr) => SelectQuery(p, vars, qexpr)
-  } }
-
-  // Parse the prologue
-  def prologue: Parser[List[Prefix]] = rep1(prefix) | "" ^^ { case _ => Nil }
-  def prefix: Parser[Prefix] = "PREFIX" ~ PREFVAR ~ IRI_REF ^^ { case  _ ~ x ~ y => Prefix(x, y) }
-
-  // Parse queries
-  def queryPart: Parser[SPARQLQuery] = ask | select
-  def ask: Parser[AskQuery] = "ASK" ~ "{" ~ qexpr ~ "}" ^^ { case _ ~ _ ~ qexpr ~ _ => AskQuery(Nil, qexpr) }
-  def select: Parser[SelectQuery] = "SELECT * WHERE"  ~  "{" ~ qexpr ~ "}" ^^ { case _ ~ _ ~ qexpr ~ _ => SelectQuery(Nil, Nil, qexpr)}
-
-  // Query expression
-  def qexpr: Parser[QueryExpression] = conjunction | triple | emptyQ
-  def conjunction: Parser[QueryExpression] = triple ~ "." ~ qexpr ^^ { case l  ~ _ ~ r => Conjunction(l, r) }
-  //def option: Parser[QueryExpression] = "OPTION" ~  "{" ~ qexpr ~ "}" ^^ { case _ ~ _ ~ o ~ _ => Optional(qexpr)}
-  //
-  def emptyQ: Parser[QueryExpression] = "" ^^ { case _ => EmptyQuery }
-  def triple: Parser[QueryExpression] = conceptAssertion | roleAssertion
-  def conceptAssertion: Parser[ConceptAssertion] = NAME ~ "a" ~ NAME ^^ { case n ~ _ ~ c => ConceptAssertion(n, c) }
-  def roleAssertion: Parser[RoleAssertion] =  NAME ~ IRI ~ NAME ^^ { case n ~ r ~ c => RoleAssertion(n, c, r) }
-
-  // Utility parsers
-  def NAME: Parser[Name] = IRI_REF | IRI | VAR
-  def IRI: Parser[Iri] = """[0-9\-:a-zA-Z/#]+""".r ^^ { case i => Iri(i.toString) }
-  def VAR: Parser[Var] = "?" ~ """[_0-9a-zA-Z]+""".r ^^ { case _ ~ v => Var(v.toString) }
-
-  def IRI_REF: Parser[Iri] = "<" ~ """[0-9\-\.:a-zA-Z/#]+""".r ~ ">" ^^ { case _  ~ i ~ _ => Iri(i.toString) }
-  def PREFVAR: Parser[Pre] = """[:_a-zA-Z]*:""".r ^^ { case p => Pre(p.toString) }
-}
-*/
-
 
 /*
 class BasicVisitor extends org.openrdf.query.algebra.QueryModelVisitor[Exception] {

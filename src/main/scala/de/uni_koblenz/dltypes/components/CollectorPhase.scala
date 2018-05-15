@@ -1,7 +1,7 @@
 package de.uni_koblenz.dltypes
 package components
 
-import de.uni_koblenz.dltypes.backend.MyGlobal
+import de.uni_koblenz.dltypes.backend.{Extractor, MyGlobal}
 import de.uni_koblenz.dltypes.tools._
 
 import scala.tools.nsc.ast.TreeDSL
@@ -11,7 +11,7 @@ import scala.tools.nsc.transform.Transform
 import scala.tools.nsc.transform.TypingTransformers
 
 
-class Collector(val global: Global)
+class CollectorPhase(val global: Global)
   extends PluginComponent with Transform with TypingTransformers with TreeDSL {
   import global._
 
@@ -23,7 +23,7 @@ class Collector(val global: Global)
     new MyTransformer(unit)
 
   class MyTransformer(unit: CompilationUnit) extends TypingTransformer(unit) with Extractor {
-    val global: Collector.this.global.type = Collector.this.global
+    val global: CollectorPhase.this.global.type = CollectorPhase.this.global
 
     val parser = new Parser
     val pp = new PrettyPrinter
@@ -46,7 +46,34 @@ class Collector(val global: Global)
       }
     }
 
-    // Returns true, if the list
+    def isAsk(ss: List[String]): Boolean = {
+      val re = """ASK\s+\{""".r
+      if (re.findFirstMatchIn(ss.head).isEmpty)
+        false
+      else
+        true
+    }
+
+    def countVars(ss: List[String]): Int = {
+      val reVar = """\?[^\s]""".r // Variables
+      val reStar = """SELECT\s+\*""".r // SELECT *
+      val reS = """SELECT(.*)WHERE""".r
+
+      // Is not SELECT *, so take vars from SELECT block.
+      if (reStar.findFirstMatchIn(ss.head).isEmpty) {
+        reporter.echo(ss.head)
+        reS.findFirstMatchIn(ss.head) match {
+          case Some(x) => reVar.findAllIn(x.group(1)).toList.distinct.size
+          case None => 0
+        }
+      }
+      else {
+        val s = ss.mkString(" ")
+        reVar.findAllIn(s).toList.distinct.size
+      }
+    }
+
+    // Returns true, if the list contains a simple query.
     def isSimpleQuery(parts: List[String]): Boolean =
       """^\s*(?i)(PREFIX|SELECT|ASK|CONSTRUCT|DESCRIBE|BASE).*""".r
         .findPrefixMatchOf(parts.head)
@@ -60,14 +87,14 @@ class Collector(val global: Global)
     }
 
     override def transform(tree: Tree): Tree = tree match {
-      // Match ordinary DL types and add them to the global symbol table for Typedef phase.
-      case DLType(n) =>
-        val tpe = MyGlobal.newDLType(parseDL(n, tree))
-        Ident(newTypeName(tpe))
-
       // Match explicit DL type inference.
       case DLInference() =>
         val tpe = MyGlobal.newInferredDLType()
+        Ident(newTypeName(tpe))
+
+      // Match ordinary DL types and add them to the global symbol table for Typedef phase.
+      case DLType(n) =>
+        val tpe = MyGlobal.newDLType(parseDL(n, tree))
         Ident(newTypeName(tpe))
 
       // Match the application of StringContext(<iri>).iri to Nil (i.e., IRI"" literals)
@@ -85,35 +112,50 @@ class Collector(val global: Global)
       case orig @ Apply(Select(Apply(obj, query), m), r)
         if (m.toString == "sparql" || m.toString == "strictsparql")
           && obj.toString == "StringContext" =>
-        // Generate the new type for this query.
-        val tpe = MyGlobal.newSparqlQueryType()
+
         // Transform query tree to String.
         val strQuery = query.map(_.toString().stripSuffix("\"").stripPrefix("\""))
-        // Test if this is a 'simple' query (i.e., needs to be wrapped in SELECT statement).
-        if (isSimpleQuery(strQuery)) {
-          val newQuery = wrapSimpleQuery(strQuery)
+
+        // Ask queries always return boolean.
+        if (isAsk(strQuery)) {
           atPos(tree.pos.makeTransparent)(
+            q"$orig.asInstanceOf[Boolean]"
+          )
+        }
+        else {
+          // Test if this is a 'simple' query (i.e., needs to be wrapped in SELECT statement).
+          val wasSimple = isSimpleQuery(strQuery)
+          // Wrap the query, if it was simple.
+          val newQuery =
+            if (wasSimple) wrapSimpleQuery(strQuery)
+            else strQuery
+          // Find arity of query.
+          val arity = countVars(newQuery)
+          // Generate the new type for this query.
+          val tpe = MyGlobal.newQueryType(arity) // TODO!
+          val tp =
+            if (arity == 1) tq"List[${newTypeName(tpe.head)}]"
+            else tq"List[${newTypeName(s"Tuple$arity")}[..${tpe.map(newTypeName)}]]"
+          if (wasSimple) {
             // Reconstruct the tree with extended query.
             if (m.toString == "sparql")
-              q"SparqlHelper(StringContext.apply(..$newQuery)).sparql(..$r).asInstanceOf[List[${newTypeName(tpe)}]]"
+              q"SparqlHelper(StringContext.apply(..$newQuery)).sparql(..$r).asInstanceOf[$tp]"
             else
-              q"SparqlHelper(StringContext.apply(..$newQuery)).strictsparql(..$r).asInstanceOf[List[${newTypeName(tpe)}]]"
-          )
-        }
-        // If not simple query extension was required, just set to generated query type and move on.
-        else {
-          atPos(tree.pos.makeTransparent)(
-            q"$orig.asInstanceOf[List[${newTypeName(tpe)}]]"
-          )
-        }
+              q"SparqlHelper(StringContext.apply(..$newQuery)).strictsparql(..$r).asInstanceOf[$tp]"
+          }
+          // For normal queries, just declare the type:
+          else
+            atPos(tree.pos.makeTransparent)(
+              q"$orig.asInstanceOf[$tp]"
+            )
+          }
 
       // Match role projections.
       case Select(Ident(t), DLSelect(n)) =>
         // Generate new type for this query
-        val tpe = MyGlobal.newSparqlQueryType()
+        val tpe = MyGlobal.newQueryType(1).head
         // Generate the projection query.
-        // TODO: Remove PREFIX part when internal prefix stuff is fixed!
-        val newQuery = List("PREFIX : <http://www.w3.org/TR/2003/PR-owl-guide-20031209/wine#> SELECT ?a WHERE {", s"${Util.decode(n)} ?a}")
+        val newQuery = List("SELECT ?a WHERE {", s"${Util.decode(n)} ?a}")
         // Generate SPARQL query.
         atPos(tree.pos.makeTransparent)(
           q"SparqlHelper(StringContext.apply(..$newQuery)).strictsparql(${t.toTermName}).asInstanceOf[List[${newTypeName(tpe)}]]"

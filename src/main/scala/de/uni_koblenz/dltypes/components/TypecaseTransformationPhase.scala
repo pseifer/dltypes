@@ -1,6 +1,6 @@
 package de.uni_koblenz.dltypes.components
 
-import de.uni_koblenz.dltypes.backend.MyGlobal
+import de.uni_koblenz.dltypes.backend.{Extractor, MyGlobal}
 import de.uni_koblenz.dltypes.tools._
 
 import scala.tools.nsc.Global
@@ -9,7 +9,7 @@ import scala.tools.nsc.plugins.PluginComponent
 import scala.tools.nsc.transform.{Transform, TypingTransformers}
 
 
-class TypecaseTransformer(val global: Global)
+class TypecaseTransformationPhase(val global: Global)
   extends PluginComponent with Transform with TypingTransformers with TreeDSL {
   import global._
 
@@ -69,7 +69,7 @@ class TypecaseTransformer(val global: Global)
   }
 
   class MyTransformer(unit: CompilationUnit) extends TypingTransformer(unit) with Extractor {
-    val global: TypecaseTransformer.this.global.type = TypecaseTransformer.this.global
+    val global: TypecaseTransformationPhase.this.global.type = TypecaseTransformationPhase.this.global
 
     val parser = new Parser
 
@@ -115,25 +115,27 @@ class TypecaseTransformer(val global: Global)
         // case x @ (_: `:RedWine`) [if <guard>]* = <body>
         case CaseDef(Bind(name, Typed(Ident(termNames.WILDCARD), t @ DLType(tpt))), guard, body) =>
           val fresh = currentUnit.freshTermName()
+          val newBody = super.transform(body)
           if (guard.isEmpty)
             cq"""$fresh: IRI if ${fresh.toTermName}.isSubsumed(${parseDL(tpt, tree)}) => {
                    val ${name.toTermName}: $t = $fresh;
-                   ..$body }"""
+                   ..$newBody }"""
           else
             cq"""$fresh: IRI if ${fresh.toTermName}.isSubsumed(${parseDL(tpt, tree)}) && ($guard) => {
                    val ${name.toTermName}: $t = $fresh;
-                   ..$body }"""
+                   ..$newBody }"""
 
         // case _: `:RedWine` [if <guard>]* => <body>
         // (note that desugared ==)
         // case (_: `:RedWine`) [if <guard>]* = <body>
         case CaseDef(Typed(Ident(termNames.WILDCARD), DLType(tpt)), guard, body) =>
+          val newBody = super.transform(body)
           // Introduce fresh name, so isSubsumed check can be performed in guard.
           val name = currentUnit.freshTermName()
           if (guard.isEmpty)
-            cq"$name: IRI if $name.isSubsumed(${parseDL(tpt, tree)}) => $body"
+            cq"$name: IRI if $name.isSubsumed(${parseDL(tpt, tree)}) => $newBody"
           else
-            cq"$name: IRI if $name.isSubsumed(${parseDL(tpt, tree)}) && ($guard) => $body"
+            cq"$name: IRI if $name.isSubsumed(${parseDL(tpt, tree)}) && ($guard) => $newBody"
 
         // Otherwise, we don't care.
         case _ => c

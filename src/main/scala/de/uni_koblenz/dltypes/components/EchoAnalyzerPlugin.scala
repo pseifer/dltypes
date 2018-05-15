@@ -1,5 +1,7 @@
 package de.uni_koblenz.dltypes.components
 
+import de.uni_koblenz.dltypes.runtime.DLType
+
 import scala.tools.nsc.Global
 import scala.tools.nsc.Mode
 
@@ -110,11 +112,13 @@ class EchoAnalyzerPlugin(global: Global, log: List[String]) {
       // type is inferred by typing the definition's right hand side.
 
       override def pluginsTypeSig(tpe: Type, typer: Typer, defTree: Tree, pt: Type): Type = {
+
         if (loglvl("pluginsTypeSig")) {
           reporter.echo("\n\n=== [\u001b[35mpluginsTypeSig\u001b[0m] ==========================")
-          reporter.echo("Inferred type (tpe): " + tpe.toString) // querying this may cause type errors
+          reporter.echo("Inferred type (tpe): " + tpe.typeSymbol.toString)
           reporter.echo("Expected type (pt): " + pt.toString)
           reporter.echo("Typed by " + typer.toString + "\n----------")
+
 
           defTree match {
             case Template(parents, self, body) =>
@@ -218,11 +222,17 @@ class EchoAnalyzerPlugin(global: Global, log: List[String]) {
 
       // Access the search instance that will be used for the implicit search.
 
-      override def pluginsNotifyImplicitSearch(search: ImplicitSearch): Unit = ()
+      override def pluginsNotifyImplicitSearch(search: ImplicitSearch): Unit = {
+        reporter.echo("search (tree): " + search.tree)
+        reporter.echo("search: " + search)
+      }
 
       // Access the implicit search result from Scalac's type checker.
 
-      override def pluginsNotifyImplicitSearchResult(result: SearchResult): Unit = ()
+      override def pluginsNotifyImplicitSearchResult(result: SearchResult): Unit = {
+        reporter.echo("result (tree): " + result.tree)
+        reporter.echo("result: " + result)
+      }
     }
 
     addAnalyzerPlugin(ConcreteAnalyzerPlugin)

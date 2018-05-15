@@ -189,7 +189,9 @@ class TestTools(val loglvl: Int = 0) {
     override protected def computeInternalPhases() = {
       // Settings for tests (command line options not available,
       // since phases are added directly.
-      MyGlobal.ontologies += ":" -> "src/test/resources/wine.rdf"
+      //MyGlobal.ontologies += ":" -> "src/test/resources/wine.rdf"
+      MyGlobal.prefixes += ":" -> "http://www.w3.org/TR/2003/PR-owl-guide-20031209/wine#"
+      MyGlobal.ontology = "src/test/resources/wine.rdf"
 
       super.computeInternalPhases
       // Load all the DLTypes phases.

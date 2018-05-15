@@ -1,10 +1,9 @@
 package de.uni_koblenz.dltypes
 package backend
 
+import de.uni_koblenz.dltypes.backend.DLTypesError.EitherDL
 import de.uni_koblenz.dltypes.tools._
 import de.uni_koblenz.dltypes.tools.DLEConcept.simplify
-
-import scala.util.Try
 
 
 class Evaluator(val reasoner: Reasoner) {
@@ -98,21 +97,25 @@ class Evaluator(val reasoner: Reasoner) {
         Map(x1 -> Existential(r, x2), x2 -> Existential(Inverse(r), x1))
   }
 
-  @throws(classOf[FaultyQueryExpressionError])
-  private def qexprToCS(qexpr: QueryExpression): CS = { qexpr match {
+  private def qexprToCS(qexpr: QueryExpression): Option[CS] = {
+    // Helper for recursive query expressions.
+    def recf(e1: QueryExpression, e2: QueryExpression, op: (CS, CS) => CS): Option[CS] =
+      qexprToCS(e1).flatMap(l => qexprToCS(e2).flatMap(r => Some(op(l, r))))
+
+    qexpr match {
       // TODO: ConceptAssertion(placeholder, ?y) (e.g. $w a ?y)  !!!
       // Basically ConceptAssertion with two variables.
-    case ConceptAssertion(Var(x), Iri(i)) => ConceptConstraint(Variable(x), Concept(i))
-    case ConceptAssertion(Var(x), TypedValue(_, Iri(i))) => LiteralConstraint(Variable(x), Type(i))
-    case RoleAssertion(Var(x), Iri(b), Iri(r)) => RoleConstraint(Variable(x), Role(r), Nominal(b))
-    case RoleAssertion(Iri(a), Var(x), Iri(r)) => InvRoleConstraint(Variable(x), Inverse(Role(r)), Nominal(a))
-    case RoleAssertion(Var(x1), Var(x2), Iri(r)) => Role2Constraint(Variable(x1), Variable(x2), Role(r))
-    case RoleAssertion(Var(x), TypedValue(_, Iri(b)), Iri(r)) => LiteralRoleConstraint(Variable(x), Data(r), Type(b))
-    case Conjunction(left, right) => Con(qexprToCS(left), qexprToCS(right))
-    case Disjunction(left, right) => Dis(qexprToCS(left), qexprToCS(right))
-    case Minus(left, right) => Neg(qexprToCS(left), qexprToCS(right))
-    case Optional(left, right) => Opt(qexprToCS(left), qexprToCS(right))
-    case _ => throw new FaultyQueryExpressionError
+    case ConceptAssertion(Var(x), Iri(i)) => Some(ConceptConstraint(Variable(x), Concept(i)))
+    case ConceptAssertion(Var(x), TypedValue(_, Iri(i))) => Some(LiteralConstraint(Variable(x), Type(i)))
+    case RoleAssertion(Var(x), Iri(b), Iri(r)) => Some(RoleConstraint(Variable(x), Role(r), Nominal(b)))
+    case RoleAssertion(Iri(a), Var(x), Iri(r)) => Some(InvRoleConstraint(Variable(x), Inverse(Role(r)), Nominal(a)))
+    case RoleAssertion(Var(x1), Var(x2), Iri(r)) => Some(Role2Constraint(Variable(x1), Variable(x2), Role(r)))
+    case RoleAssertion(Var(x), TypedValue(_, Iri(b)), Iri(r)) => Some(LiteralRoleConstraint(Variable(x), Data(r), Type(b)))
+    case Conjunction(left, right) => recf(left, right, Con)
+    case Disjunction(left, right) => recf(left, right, Dis)
+    case Minus(left, right) => recf(left, right, Neg)
+    case Optional(left, right) => recf(left, right, Opt)
+    case _ => None
   } }
 
   // Test, whether DLEConcept contains variables.
@@ -153,57 +156,73 @@ class Evaluator(val reasoner: Reasoner) {
   def eval(vs: Seq[Var],
            qe: QueryExpression,
            placeholders: ConstraintMap,
-           strict: Boolean): Try[List[DLEConcept]] =
-    Try {
-      val cs = qexprToCS(qe)    // build up constraint sets
-      val constraints = cs.get  // evaluate constraints
+           strict: Boolean): EitherDL[List[DLEConcept]] =
 
-      val res =
-        if (strict || MyGlobal.strictQueryTyping) {
-          // First Pass: Resolve constraints with placeholders.
-          val before = resolve(constraints)
+    // Build the constraint set.
+    qexprToCS(qe) match {
+      case None =>
+        Left(InferenceError("Query expression is faulty. There might be something wrong with the SPARQL query."))
+      case Some(cs) => {
+        // Evaluate constraints.
+        val constraints = cs.get
 
-          // Check if placeholder constraints are satisfied by true argument types.
-          before.foreach { case (v@Variable(vi), c) =>
-            val mapped = Variable(s"?$vi")
-            if (placeholders.contains(mapped)) {
-              val test = Subsumed(placeholders(mapped), c)
-              if (reasoner.prove(test))
-                Unit
+        val res =
+          if (strict || MyGlobal.strictQueryTyping) {
+            // First Pass: Resolve constraints with placeholders.
+            val before = resolve(constraints)
+
+            // Check if placeholder constraints are subsumed by true argument types.
+            val sat = before.map {
+              case (Variable(vi), c) =>
+                val mapped = Variable(s"?$vi")
+                if (placeholders.contains(mapped)) {
+                  val test = Subsumed(placeholders(mapped), c)
+                  Some((reasoner.prove(test), test))
+                }
+                else
+                  None
+            }.filter( x => x.isDefined && !x.get._1).map(_.get._2)
+              //.map(x =>
+              //if (x.isDefined && !x.get._1)
+              //  x.get._2)
+
+            // There was an error.
+            if (sat.nonEmpty)
+              Left(SPARQLError(s"Constraints not subsumed by argument types for: ${
+                sat.map(t => "\n" + t.toString)
+              }"))
+            else
+              // Second pass: Resolve constraints, but replace placeholders with argument types.
+              Right(resolve(constraints.map { case (v@Variable(vi), c) =>
+                val mapped = Variable(s"?$vi")
+                if (placeholders.contains(mapped))
+                  v -> placeholders(mapped)
+                else
+                  v -> c
+              }))
+          }
+          else {
+            // Resolve constraints, intersect placeholder types with their constraints.
+            Right(resolve(constraints.map { case (v@Variable(vi), c) =>
+              val mapped = Variable(s"?$vi")
+              if (placeholders.contains(mapped))
+                v -> Intersection(c, placeholders(mapped))
               else
-                // TODO: Proper error reporting
-                throw new RuntimeException("FAILURE " + test + " was not true!")
-            }
+                v -> c
+            }))
           }
 
-          // Second pass: Resolve constraints, but replace placeholders with argument types.
-          resolve(constraints.map { case (v@Variable(vi), c) =>
-            val mapped = Variable(s"?$vi")
-            if (placeholders.contains(mapped))
-              v -> placeholders(mapped)
-            else
-              v -> c
-          })
+        res.flatMap { r =>
+          // Check if types are satisfiable.
+          if (r.values.map { case x => reasoner.prove(Satisfiable(x)) }.exists(_ == false))
+            Left(TypeError("Query is not satisfiable."))
+          // Using SELECT * in query, return all.
+          else if (vs.isEmpty) // Nil == SELECT * ...
+            Right(r.toList.sortWith { case ((Variable(x1), _), (Variable(x2), _)) => x1 < x2 }.map(_._2))
+          else
+          // Otherwise, project to selected variables.
+            Right(vs.map { case Var(x) => r(Variable(x)) }.toList)
         }
-        else {
-          // Resolve constraints, intersect placeholder types with their constraints.
-          resolve(constraints.map { case (v@Variable(vi), c) =>
-            val mapped = Variable(s"?$vi")
-            if (placeholders.contains(mapped))
-              v -> Intersection(c, placeholders(mapped))
-            else
-              v -> c
-          })
-        }
-
-      // Check if types are satisfiable.
-      if (!res.values.map { case x => reasoner.prove(Satisfiable(x)) }.forall(identity))
-        throw new UnsatisfiableQueryError
-
-      if (vs.isEmpty) // Nil == SELECT * ...
-        res.toList.sortWith { case ((Variable(x1), _), (Variable(x2), _)) => x1 < x2 }.map(_._2)
-      else
-      // Select only variables present in vs.
-        vs.map { case Var(x) => res(Variable(x)) }.toList
+      }
     }
 }
