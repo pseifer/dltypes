@@ -7,12 +7,13 @@ import scala.tools.nsc.util.ClassPath
 import scala.reflect.internal.util.BatchSourceFile
 import scala.tools.nsc.io.VirtualDirectory
 import de.uni_koblenz.dltypes.DLTypes
-import de.uni_koblenz.dltypes.backend.MyGlobal
+import de.uni_koblenz.dltypes.backend.Globals
+import org.semanticweb.owlapi.model.IRI
 
 import scala.collection.mutable.ListBuffer
 
 
-class TestTools(val loglvl: Int = 0) {
+class TestTools(val loglvl: Int = 0, val debug: Boolean = false) {
 
   // Public API
 
@@ -25,6 +26,16 @@ class TestTools(val loglvl: Int = 0) {
   def testCase(test: TestCase): (Boolean, Boolean) = test match {
     case TestCase(_, n, _, code) =>
       testCase(n, code)
+  }
+
+  def customReport(before: Long, after: Long, size: Int) = {
+    println(
+      s"""
+         |---
+         |TIME ${after - before} ms
+         |SIZE $size
+         |---
+       """.stripMargin)
   }
 
   def testCase(name: String, test: String): (Boolean, Boolean) = {
@@ -41,7 +52,27 @@ class TestTools(val loglvl: Int = 0) {
     reporter.reset()
 
     val run = new compiler.Run()
+
+    val before = System.currentTimeMillis()
     run.compileSources(sources)
+    val after = System.currentTimeMillis()
+
+    customReport(before, after, virtualDir.size)
+
+    (reporter.hasErrors, reporter.hasWarnings)
+  }
+
+  def freeTestCase(name: String, test: String): (Boolean, Boolean) = {
+    val sources = mkTestNormal(test)
+
+    defaultReporter.reset()
+    val run = new defaultCompiler.Run()
+
+    val before = System.currentTimeMillis()
+    run.compileSources(sources)
+    val after = System.currentTimeMillis()
+
+    customReport(before, after, virtualDir.size)
 
     (reporter.hasErrors, reporter.hasWarnings)
   }
@@ -173,7 +204,12 @@ class TestTools(val loglvl: Int = 0) {
         "class Main extends App {",
         test,
         "}")
-    List(new BatchSourceFile("test", code.mkString("\n")))
+    mkTestNormal(code.mkString("\n"))
+  }
+
+  // Construct a test case without wrapping it.
+  private def mkTestNormal(test: String): List[BatchSourceFile] = {
+    List(new BatchSourceFile("test", test))
   }
 
   // The compiler settings.
@@ -181,6 +217,7 @@ class TestTools(val loglvl: Int = 0) {
   if (loglvl >= 3) {
     settings.processArgumentString("-Xprint:typer")
     settings.processArgumentString("-Xprint:superaccessors")
+    settings.processArgumentString("-Xprint:jvm")
   }
 
   private val reporter = new ConsoleReporter(settings)
@@ -189,7 +226,15 @@ class TestTools(val loglvl: Int = 0) {
     override protected def computeInternalPhases() = {
       // Settings for tests (command line options not available,
       // since phases are added directly.
-      MyGlobal.ontologies += ":" -> "src/test/resources/wine.rdf"
+      //MyGlobal.prefixes += ":" -> "http://www.w3.org/TR/2003/PR-owl-guide-20031209/wine#"
+      Globals.ontology = IRI.create { "http://www.w3.org/TR/2003/PR-owl-guide-20031209/wine" }
+      Globals.prefixes += ":" -> (Globals.ontology.toURI.getPath + "#")
+      Globals.doABoxReasoning = true
+      if (debug)
+        Globals.logSettings = Globals.ALL
+      else
+        Globals.logSettings = Globals.PRINT_CHECKS
+      Globals.brokenIsError = false
 
       super.computeInternalPhases
       // Load all the DLTypes phases.
@@ -197,6 +242,10 @@ class TestTools(val loglvl: Int = 0) {
         phasesSet += phase
     }
   }
+
+  private val defaultSettings = new Settings
+  private val defaultReporter = new ConsoleReporter(defaultSettings)
+  private val defaultCompiler = new Global(defaultSettings, defaultReporter)
 
   // Add "scala-compiler.jar" and "scala-library.jar" to class path.
   // This is required for SBT.
@@ -206,7 +255,10 @@ class TestTools(val loglvl: Int = 0) {
     .map(_.replaceAll("scala-compiler.jar", "scala-library.jar"))
   settings.classpath.value = ClassPath.join(entries ++ path : _*)
 
+  defaultSettings.classpath.value = ClassPath.join(entries ++ path : _*)
+
   // Use a virtual directory for compilation files (.class).
   private val virtualDir = new VirtualDirectory("(memory)", None)
   settings.outputDirs.setSingleOutput(virtualDir)
+  defaultSettings.outputDirs.setSingleOutput(virtualDir)
 }

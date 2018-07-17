@@ -3,9 +3,9 @@ import de.uni_koblenz.dltypes.tools._
 import org.scalatest._
 
 
-class EvaluatorTest extends FreeSpec {
+class ConstraintResolverTest extends FreeSpec {
 
-  val uator = new Evaluator(new TrueReasoner)
+  val uator = new ConstraintResolver(new TrueReasoner)
 
   val q1 = Conjunction(
     RoleAssertion(Var("?x"), Var("?y"), Iri(":knows")),
@@ -13,7 +13,7 @@ class EvaluatorTest extends FreeSpec {
 
   "all" in {
     // No variables requested:
-    val cs = uator.eval(Nil, q1, Map())
+    val cs = uator.eval(Nil, q1, Map(), strict = false)
     println(cs)
     assert(cs == List(
       Intersection(Existential(Inverse(Role(":knows")),Existential(Role(":knows"),Top)),Concept(":Researcher")),

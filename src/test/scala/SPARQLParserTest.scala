@@ -5,6 +5,8 @@ import org.scalatest._
 class SPARQLParserTest extends FlatSpec {
   // Test data
 
+  // TODO: Finish tests (results missing)
+
   val prefixSPARQL1 = "PREFIX : <someiri>"
   val prefixCode1 = Prefix(Pre(":"), Iri("someiri"))
   val prefixSPARQL2 = "PREFIX uni: <http://www.w3.org/TR/2003/PR-owl-guide-20031209/wine#>"
@@ -31,6 +33,35 @@ class SPARQLParserTest extends FlatSpec {
          |  }
          |}
        """.stripMargin)
+    println(qs)
+  }
+
+  "The parser" should "parse optional" in {
+    val p = new SPARQLParser
+    val qs = p.parse(
+      s"""
+         |PREFIX : <http://www.w3.org/TR/2003/PR-owl-guide-20031209/wine#>
+         |SELECT * WHERE {
+         |  $conceptAssertSPARQL.
+         |  OPTIONAL { $roleAssertSPARQL }
+         |}
+       """.stripMargin )
+    println(qs)
+  }
+
+  "The parser" should "parse minus" in {
+    val p = new SPARQLParser
+    val qs = p.parse(
+      s"""
+         |PREFIX : <http://www.w3.org/TR/2003/PR-owl-guide-20031209/wine#>
+         |SELECT * WHERE {
+         |  $conceptAssertSPARQL.
+         |  MINUS {
+         |    $roleAssertSPARQL.
+         |    $conceptAssertSPARQL.
+         |  }
+         |}
+       """.stripMargin )
     println(qs)
   }
 
