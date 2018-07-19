@@ -30,7 +30,7 @@ class DLTypes (override val global: Global) extends Plugin {
         Globals.prefixes += ":" -> option.drop("prefix:".length)
         success = true
       case None =>
-        Globals.prefixes += ":" -> (Globals.ontology.toURI.getPath + "#")
+        Globals.prefixes += ":" -> (Globals.ontology.toString + "#")
         success = true
         //error("-P:dltypes:prefix not specified")
         //success = false }

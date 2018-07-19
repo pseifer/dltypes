@@ -749,13 +749,12 @@ class CheckerPhase(val global: Global) extends PluginComponent {
           log.sig(s"return _ : ${expr.tpe}", tpe = tree.tpe.toString)
           log.done("Return", expr.tpe.toString)
 
-        case Try(block, catches, fin) =>
+        case Try(block, catches, _) =>
           val t = lubDLRecur(block.tpe :: catches.map(_.tpe))
           if (t.isDefined) {
             inferAndUpdate(tree, t.get)
             checkType(tree.pos, tree.tpe, t.get)
           }
-          checkType(tree.pos, tree.tpe, fin.tpe)
           log.sig(s"try _ : ${block.tpe} catch ", catches.map("_ : " + _.tpe.toString), "", tree.tpe.toString)
           log.done("Try", "")
 
