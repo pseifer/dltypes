@@ -1,29 +1,3 @@
-# Random
-## Success
-#### T1
-```scala
-val rw = iri"PageMillWineryCabernetSauvignon"
-val ww = iri"PeterMccoyChardonnay"
-def method[A,B](a: A)(b: B)(a2: A): Tuple2[A,B] = (a,b)
-val t: Tuple2[`#t`,`#t`] = method(rw)(ww)(rw)
-```
-
-#### T2
-```scala
-val rw = iri"PageMillWineryCabernetSauvignon"
-val ww = iri"PeterMccoyChardonnay"
-def method(r: `:RedWine`)(w: `:WhiteWine`): List[`:Wine`] = List(r,w)
-val t: List[`#t`] = method(rw)(ww)
-```
-
-#### T3
-```scala
-val rw = iri"PageMillWineryCabernetSauvignon"
-def method(r: `:RedWine`): List[`:Wine`] = List(r)
-val t: List[`#t`] = method(rw)
-```
-
-
 # Val
 ## Success
 #### Declared val same type
@@ -342,6 +316,15 @@ val wine: `:RedWine | :WhiteWine` =
   else iri"PageMillWineryCabernetSauvignon"
 ```
 
+#### Full three branch if
+```scala
+val wine: `:RedWine | :WhiteWine | :RoseWine` =
+  if (1 < 2) iri"RoseDAnjou"
+  else if (2 > 3) iri"PeterMccoyChardonnay"
+  else iri"PageMillWineryCabernetSauvignon"
+```
+
+
 ## Failure
 #### Two branch if 1
 ```scala
@@ -405,6 +388,30 @@ val wine `:WhiteWine` =
   else iri"PageMillWineryCabernetSauvignon"
 ```
 
+#### Full three branch if 1
+```scala
+val wine: `:RedWine | :WhiteWine` =
+  if (1 < 2) iri"RoseDAnjou"
+  else if (2 > 3) iri"PeterMccoyChardonnay"
+  else iri"PageMillWineryCabernetSauvignon"
+```
+
+#### Full three branch if 2
+```scala
+val wine: `:RedWine | :RoseWine` =
+  if (1 < 2) iri"RoseDAnjou"
+  else if (2 > 3) iri"PeterMccoyChardonnay"
+  else iri"PageMillWineryCabernetSauvignon"
+```
+
+#### Full three branch if 3
+```scala
+val wine: `:WhiteWine | :RoseWine` =
+  if (1 < 2) iri"RoseDAnjou"
+  else if (2 > 3) iri"PeterMccoyChardonnay"
+  else iri"PageMillWineryCabernetSauvignon"
+```
+
 
 # Match and Case
 ## Success
@@ -415,6 +422,13 @@ val w: `:RedWine | :WhiteWine` = x match {
   case x: `:RedWine` => x
   case y: `:WhiteWine` => y
 }
+```
+
+#### Instance
+```scala
+val x: Any = iri"PeterMccoyChardonnay"
+if (x.isInstanceOf[`:RedWine | :WhiteWine`])
+  println("always" + 19)
 ```
 
 ## Failure
@@ -498,22 +512,210 @@ def m(x: `:RedWine`): `:RedWine` = {
 
 # Try
 ## Success
-## Failure
+#### One branch
+```scala
+val ww = iri"PeterMccoyChardonnay"
+val rw = iri"PageMillWineryCabernetSauvignon"
 
+val x: `:RedWine | :WhiteWine` = {
+  try {
+    ww
+  }
+  catch {
+    case e: Exception => rw
+  }
+}
+```
 
-# Throw
-## Success
+#### Two branches
+```scala
+val ww = iri"PeterMccoyChardonnay"
+val rw = iri"PageMillWineryCabernetSauvignon"
+val ro = iri"RoseDAnjou"
+
+val x: `:RedWine | :WhiteWine | :RoseWine` = {
+  try {
+    rw
+  }
+  catch {
+    case e: RuntimeException => ww
+    case e: Exception => ro
+  }
+}
+```
+
 ## Failure
+#### One branch 1
+```scala
+val ww = iri"PeterMccoyChardonnay"
+val rw = iri"PageMillWineryCabernetSauvignon"
+
+val x: `:RedWine` = {
+  try {
+    ww
+  }
+  catch {
+    case e: Exception => rw
+  }
+}
+```
+
+#### One branch 2
+```scala
+val ww = iri"PeterMccoyChardonnay"
+val rw = iri"PageMillWineryCabernetSauvignon"
+
+val x: `:WhiteWine` = {
+  try {
+    ww
+  }
+  catch {
+    case e: Exception => rw
+  }
+}
+```
+
+#### Two branches 1
+```scala
+val ww = iri"PeterMccoyChardonnay"
+val rw = iri"PageMillWineryCabernetSauvignon"
+val ro = iri"RoseDAnjou"
+
+val x: `:WhiteWine | :RoseWine` = {
+  try {
+    rw
+  }
+  catch {
+    case e: RuntimeException => ww
+    case e: Exception => ro
+  }
+}
+```
+
+#### Two branches 2
+```scala
+val ww = iri"PeterMccoyChardonnay"
+val rw = iri"PageMillWineryCabernetSauvignon"
+val ro = iri"RoseDAnjou"
+
+val x: `:RedWine | :RoseWine` = {
+  try {
+    rw
+  }
+  catch {
+    case e: RuntimeException => ww
+    case e: Exception => ro
+  }
+}
+```
+
+#### Two branches 3
+```scala
+val ww = iri"PeterMccoyChardonnay"
+val rw = iri"PageMillWineryCabernetSauvignon"
+val ro = iri"RoseDAnjou"
+
+val x: `:RedWine | :WhiteWine` = {
+  try {
+    rw
+  }
+  catch {
+    case e: RuntimeException => ww
+    case e: Exception => ro
+  }
+}
+```
 
 
 # Typed
 ## Success
+#### Annotated type
+```scala
+val w: `:Wine` =  iri"PageMillWineryCabernetSauvignon" : `:RedWine`
+```
+
 ## Failure
+#### Annotated type 1
+```scala
+val w: `:Wine` =  iri"PageMillWineryCabernetSauvignon" : `:WhiteWine`
+```
+
+#### Annotated type 2
+```scala
+val w: `:RoseWine` =  iri"PageMillWineryCabernetSauvignon" : `:WhiteWine`
+```
 
 
 # New
 ## Success
+#### Constructor
+```scala
+class Thing(x: `:WhiteWine`) { }
+val ww = iri"PeterMccoyChardonnay"
+val t: Thing = new Thing(ww)
+```
+
+#### Constructor val
+```scala
+class Thing(val x: `:WhiteWine`) { }
+val ww = iri"PeterMccoyChardonnay"
+val t: Thing = new Thing(ww)
+```
+
+#### Constructor 2 arguments
+```scala
+class Thing(x: `:WhiteWine`, y: `:RedWine`) { }
+val ww = iri"PeterMccoyChardonnay"
+val rw = iri"PageMillWineryCabernetSauvignon"
+val t: Thing = new Thing(ww, rw)
+```
+
+#### Constructor with type parameter
+```scala
+class Thing[+W](x: W, y: W) { }
+val ww = iri"PeterMccoyChardonnay"
+val rw = iri"PageMillWineryCabernetSauvignon"
+val t: Thing[`:Wine`] = new Thing(ww, rw)
+```
+
 ## Failure
+#### Constructor
+```scala
+class Thing(x: `:RedWine`) { }
+val ww = iri"PeterMccoyChardonnay"
+val t: Thing = new Thing(ww)
+```
+
+#### Constructor val
+```scala
+class Thing(val x: `:RedWine`) { }
+val ww = iri"PeterMccoyChardonnay"
+val t: Thing = new Thing(ww)
+```
+
+#### Constructor 2 arguments
+```scala
+class Thing(x: `:RedWine`, y: `:WhiteWine`) { }
+val ww = iri"PeterMccoyChardonnay"
+val rw = iri"PageMillWineryCabernetSauvignon"
+val t: Thing = new Thing(ww, rw)
+```
+
+#### Constructor with type parameter 1
+```scala
+class Thing[+W](x: W, y: W) { }
+val ww = iri"PeterMccoyChardonnay"
+val rw = iri"PageMillWineryCabernetSauvignon"
+val t: Thing[`:RedWine`] = new Thing(ww, rw)
+```
+
+#### Constructor with type parameter 2
+```scala
+class Thing[W](x: W, y: W) { }
+val ww = iri"PeterMccoyChardonnay"
+val rw = iri"PageMillWineryCabernetSauvignon"
+val t: Thing[`:Wine`] = new Thing(ww, rw)
+```
 
 
 # Apply
@@ -580,34 +782,140 @@ val x: `:WhiteWine` = m(iri"PageMillWineryCabernetSauvignon")(iri"PeterMccoyChar
 ```
 
 
-# TypedApply
-## Success
-## Failure
-
-
-# Super
-## Success
-## Failure
-
-
-# This
-## Success
-## Failure
-
-
-# Select
-## Success
-## Failure
-
-
 # Queries
 ## Success
+#### With args (1)
+```scala
+val w: `:Wine` = iri"PeterMccoyChardonnay"
+val x1: List[`:Winery`] = sparql"SELECT ?y WHERE { $w :hasMaker ?y }"
+```
+
+#### With args (2)
+```scala
+val w: `:Winery` = iri"PeterMccoy"
+val x: List[`∃:hasMaker.:Winery`] = sparql"SELECT ?y WHERE { ?y :hasMaker $w }"
+```
+
+#### With args (3)
+```scala
+val w: List[`:Winery`] = List(iri"PeterMccoy")
+val x: List[`∃:hasMaker.:Winery`] = sparql"SELECT ?y WHERE { ?y :hasMaker ${w.head} }"
+```
+
+#### With Scala args
+```scala
+val w: `:Wine` = iri"PeterMccoyChardonnay"
+val i: Int = 1998
+val x = sparql"SELECT ?y WHERE { $w :hasVintageYear ?y. ?y :yearValue $i }"
+val y: `:VintageYear` = x.head
+```
+
+#### With Scala args expr
+```scala
+val w: `:Wine` = iri"PeterMccoyChardonnay"
+val i: Int = 98
+val x = sparql"SELECT ?y WHERE { $w :hasVintageYear ?y. ?y :yearValue ${1900 + i} }"
+val y: `:VintageYear` = x.head
+```
+
+#### Strict query with arg
+```scala
+val p = iri"PeterMccoyChardonnay"
+val x: List[`:Winery`] = strictsparql"SELECT ?y WHERE { $p :hasMaker ?y }"
+```
+
 ## Failure
+#### With args (1) 1
+```scala
+val w: `:Wine` = iri"PeterMccoyChardonnay"
+val x1: List[`:Wine`] = sparql"SELECT ?y WHERE { $w :hasMaker ?y }"
+```
+
+#### With args (1) 2
+```scala
+val w: `:Wine` = iri"PeterMccoyChardonnay"
+val x1: List[`:Winery`] = sparql"SELECT ?y WHERE { $w :locatedIn ?y }"
+```
+
+#### With args (2)
+```scala
+val w: `:Winery` = iri"PeterMccoy"
+val x: List[`:Wine`] = sparql"SELECT ?y WHERE { ?y :hasMaker $w }"
+```
+
+#### With args (3)
+```scala
+val w: List[`:Winery`] = List(iri"PeterMccoy")
+val x: List[`∃:hasMaker.:Winery`] = sparql"SELECT ?y WHERE { ?y :locatedIn ${w.head} }"
+```
+
+#### With Scala args
+```scala
+val w: `:Wine` = iri"PeterMccoyChardonnay"
+val i: String = "1998"
+val x = sparql"SELECT ?y WHERE { $w :hasVintageYear ?y. ?y :yearValue $i }"
+val y: `:VintageYear` = x.head
+```
+
+#### With Scala args expr
+```scala
+val w: `:Wine` = iri"PeterMccoyChardonnay"
+val i: Int = 1998
+val x = sparql"SELECT ?y WHERE { $w :hasVintageYear ?y. ?y :yearValue ${i.toString} }"
+val y: `:VintageYear` = x.head
+```
+
+#### Strict query with arg 1
+```scala
+val p = iri"PeterMccoyChardonnay"
+val x: List[`:Winery`] = strictsparql"SELECT ?y WHERE { $p :locatedIn ?y }"
+```
+
+#### Strict query with arg 2
+```scala
+val p = iri"PeterMccoy"
+val x: List[`:Winery`] = strictsparql"SELECT ?y WHERE { $p :hasMaker ?y }"
+```
 
 
-# IRI
+# Role Projection
 ## Success
+#### Simple projection (1)
+```scala
+val p = iri"PeterMccoyChardonnay"
+val x: List[`:Winery`] = p.`:hasMaker`
+```
+
+#### Simple projection (2)
+```scala
+val p: `:Wine` = iri"PeterMccoyChardonnay"
+val x: List[`:Winery`] = p.`:hasMaker`
+```
+
 ## Failure
+#### Simple projection (1) 1
+```scala
+val p = iri"PeterMccoy"
+val x: List[`:Winery`] = p.`:hasMaker`
+```
+
+#### Simple projection (1) 2
+```scala
+val p = iri"PeterMccoyChardonnay"
+val x: List[`:Winery`] = p.`:locatedIn`
+```
+
+#### Simple projection (2) 1
+```scala
+val p: `:Winery` = iri"PeterMccoy"
+val x: List[`:Winery`] = p.`:hasMaker`
+```
+
+#### Simple projection (2) 2
+```scala
+val p: `:Wine` = iri"PeterMccoyChardonnay"
+val x: List[`:Winery`] = p.`:locatedIn`
+```
 
 
 # Type Parameters
@@ -804,6 +1112,55 @@ def m(x: `:RedWine & :WhiteWine`): `#t` = x
 ```
 
 
+# Two parameter lists
+## Success
+#### T1
+```scala
+val rw = iri"PageMillWineryCabernetSauvignon"
+val ww = iri"PeterMccoyChardonnay"
+def method[A,B](a: A)(b: B)(a2: A): Tuple2[A,B] = (a,b)
+val t: Tuple2[`:RedWine`,`:WhiteWine`] = method(rw)(ww)(rw)
+```
+
+#### T2
+```scala
+val rw = iri"PageMillWineryCabernetSauvignon"
+val ww = iri"PeterMccoyChardonnay"
+def method(r: `:RedWine`)(w: `:WhiteWine`): List[`:Wine`] = List(r,w)
+val t: List[`:Wine`] = method(rw)(ww)
+```
+
+#### T3
+```scala
+val rw = iri"PageMillWineryCabernetSauvignon"
+def method(r: `:RedWine`): List[`:Wine`] = List(r)
+val t: List[`:Wine`] = method(rw)
+```
+
+## Failure
+#### T1
+```scala
+val rw = iri"PageMillWineryCabernetSauvignon"
+val ww = iri"PeterMccoyChardonnay"
+def method[A,B](a: A)(b: B)(a2: A): Tuple2[A,B] = (a,b)
+val t: Tuple2[`:WhiteWine`,`:RedWine`] = method(rw)(ww)(rw)
+```
+
+#### T2
+```scala
+val rw = iri"PageMillWineryCabernetSauvignon"
+val ww = iri"PeterMccoyChardonnay"
+def method(r: `:WhiteWine`)(w: `:RedWine`): List[`:Wine`] = List(r,w)
+val t: List[`#t`] = method(rw)(ww)
+```
+
+#### T3
+```scala
+val rw = iri"PageMillWineryCabernetSauvignon"
+def method(r: `:WhiteWine`): List[`:Wine`] = List(r)
+val t: List[`#t`] = method(rw)
+```
+
 # Combined Cases
 ## Success
 #### Method with block if body
@@ -821,6 +1178,32 @@ val x: `:RedWine | :WhiteWine` =
 type RedOrWhiteWine = `:RedWine | :WhiteWine`
 def m(x: RedOrWhiteWine): RedOrWhiteWine = x
 val x: `:Wine` = m(iri"PeterMccoyChardonnay")
+```
+
+#### Val if in list
+```scala
+val p = 1 < 2
+val rw = iri"PageMillWineryCabernetSauvignon"
+val ww = iri"PeterMccoyChardonnay"
+val w: `:Wine` = iri"PeterMccoyChardonnay"
+val e: Seq[`:Wine`] =
+    if (p) { List(rw) }
+    else if (!p) { Seq(ww) }
+    else { List(w) }
+```
+
+#### Function with if body
+```scala
+val wine = iri"RoseDAnjou"
+def fn(x: `:RoseWine`) = {
+  val p = 1 < 2
+  val rw = iri"PageMillWineryCabernetSauvignon"
+  val ww = iri"PeterMccoyChardonnay"
+  if (p) { rw }
+  else if (!p) { ww }
+  else { x }
+}
+val e2: `:WhiteWine | :RedWine | :RoseWine` = fn(wine)
 ```
 
 ## Failure
@@ -858,3 +1241,56 @@ def m(x: RedOrWhiteWine): RedOrWhiteWine = x
 val x: `:Wine` = m(iri"PeterMccoyChardonnay")
 ```
 
+#### Val if in list
+```scala
+val p = 1 < 2
+val rw = iri"PageMillWineryCabernetSauvignon"
+val ww = iri"PeterMccoyChardonnay"
+val w: `:Wine` = iri"PeterMccoyChardonnay"
+val e: Seq[`:RedWine`] =
+    if (p) { List(rw) }
+    else if (!p) { Seq(ww) }
+    else { List(w) }
+```
+
+#### Function with if body 1
+```scala
+val wine = iri"RoseDAnjou"
+def fn(x: `:RoseWine`) = {
+  val p = 1 < 2
+  val rw = iri"PageMillWineryCabernetSauvignon"
+  val ww = iri"PeterMccoyChardonnay"
+  if (p) { rw }
+  else if (!p) { ww }
+  else { x }
+}
+val e2: `:WhiteWine | :RoseWine` = fn(wine)
+```
+
+#### Function with if body 2
+```scala
+val wine = iri"RoseDAnjou"
+def fn(x: `:RoseWine`) = {
+  val p = 1 < 2
+  val rw = iri"PageMillWineryCabernetSauvignon"
+  val ww = iri"PeterMccoyChardonnay"
+  if (p) { rw }
+  else if (!p) { ww }
+  else { x }
+}
+val e2: `:WhiteWine | :RedWine` = fn(wine)
+```
+
+#### Function with if body 3
+```scala
+val wine = iri"RoseDAnjou"
+def fn(x: `:RoseWine`) = {
+  val p = 1 < 2
+  val rw = iri"PageMillWineryCabernetSauvignon"
+  val ww = iri"PeterMccoyChardonnay"
+  if (p) { rw }
+  else if (!p) { ww }
+  else { x }
+}
+val e2: `:RoseWine | :RedWine` = fn(wine)
+```

@@ -228,7 +228,7 @@ class TestTools(val loglvl: Int = 0, val debug: Boolean = false) {
       // since phases are added directly.
       //MyGlobal.prefixes += ":" -> "http://www.w3.org/TR/2003/PR-owl-guide-20031209/wine#"
       Globals.ontology = IRI.create { "http://www.w3.org/TR/2003/PR-owl-guide-20031209/wine" }
-      Globals.prefixes += ":" -> (Globals.ontology.toURI.getPath + "#")
+      Globals.prefixes += ":" -> (Globals.ontology.toString + "#")
       Globals.doABoxReasoning = true
       if (debug)
         Globals.logSettings = Globals.ALL
