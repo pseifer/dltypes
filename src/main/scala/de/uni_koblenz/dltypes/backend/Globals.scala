@@ -40,12 +40,7 @@ object Globals {
   var strictQueryTyping = false
 
   // Regulates whether ABox reasoning is enabled at compile time.
-  var doABoxReasoning = true
-
-  // If strictQueryTyping is active, this setting regulates
-  // whether warnings or errors are produced in (strict) error cases.
-  // TODO: currently unused!
-  var strictWarningsOnly = false
+  var doABoxReasoning = false
 
   // If this is false, do not issue error when 'broken' DL types
   // (i.e., raw DL types where annotated DL types are expected)

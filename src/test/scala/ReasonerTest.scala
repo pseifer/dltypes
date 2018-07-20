@@ -12,8 +12,6 @@ class ReasonerTest extends Parser with FlatSpecLike with Matchers {
   }
   val reasoner = new ReasonerHermit(fi)
 
-  // TODO: Add more test cases.
-
   "The Reasoner" should "prove simple concept equality" in {
     reasoner.prove(ConceptEquality(Concept(":Wine"), Concept(":Wine"))) should be(true)
     reasoner.prove(ConceptEquality(Concept(":RedWine"), Concept(":RedWine"))) should be(true)
@@ -61,10 +59,6 @@ class ReasonerTest extends Parser with FlatSpecLike with Matchers {
 
     reasoner.prove(Subsumed(Existential(Data(":yearValue"), Type("xsd:integer")), Concept(":VintageYear"))) should be(true)
     reasoner.prove(Subsumed(Existential(Data(":yearValue"), Type("xsd:string")), Concept(":VintageYear"))) should be(false)
-
-
-
-    // Evaluation with placeholders tests. TODO: remove
 
     reasoner.prove(Subsumed(
       Concept(":Wine"),

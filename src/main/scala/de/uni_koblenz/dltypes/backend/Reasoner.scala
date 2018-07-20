@@ -88,9 +88,9 @@ class ReasonerHermit(val onto: IRI) extends Reasoner {
       case Existential(Data(iri1), Type(iri2)) =>
         df.getOWLDataSomeValuesFrom(df.getOWLDataProperty(toIRI(iri1)), df.getOWLDatatype(toIRI(iri2)))
       case Existential(Data(iri1), Top) =>
-        throw new RuntimeException("top in data property") // TODO fix
+        throw new RuntimeException("top in data property")
       case Existential(Data(iri1), Bottom) =>
-        throw new RuntimeException("bottom in data property") // TODO fix
+        throw new RuntimeException("bottom in data property")
       case Existential(role, expr) => df.getOWLObjectSomeValuesFrom(roleToOWL(role), conceptToOWL(expr))
       case Universal(role, expr) =>
         df.getOWLObjectAllValuesFrom(roleToOWL(role), conceptToOWL(expr))

@@ -11,6 +11,9 @@ import de.uni_koblenz.dltypes.tools._
 import de.uni_koblenz.dltypes.runtime.{DLType, dl}
 
 
+// The 'dl-typer' phase.
+// Implements the ScaSpa typer.
+// This is a bit of a 'HC SVNT DRACONES' situation, to be honest.
 class CheckerPhase(val global: Global) extends PluginComponent {
   import global._
 
@@ -269,13 +272,7 @@ class CheckerPhase(val global: Global) extends PluginComponent {
   // argument types for cases which are not type parameters.
   private def inferAndCheckMethodDL(pos: Position, paramTypes: List[Type], args: List[Type],
                                     formalReturnTpe: Type, returnTpe: Type): Type = {
-
-    log.log(s"--------------------------------")
-    log.log("paramTypes " + paramTypes)
-    log.log("args " + args)
-    log.log("formal " + formalReturnTpe.toString)
-    log.log("returnTpe " + returnTpe.toString)
-    log.log(s"--------------------------------")
+    // HC SVNT DRACONES
 
     val both = paramTypes.lastOption match {
       // If this (has to be the last) is repeated parameter...
@@ -297,8 +294,6 @@ class CheckerPhase(val global: Global) extends PluginComponent {
 
     val m = scala.collection.mutable.Map[Type, List[Type]]()
 
-    log.log(s"$paramTypes \n $args \n $both")
-
     def collect(left: Type, right: Type, variance: Variance): Unit = {
       if (left.typeSymbol.isTypeParameterOrSkolem && isDLType(right)) {
         if (m.contains(left)) {
@@ -317,9 +312,6 @@ class CheckerPhase(val global: Global) extends PluginComponent {
     }
 
     def recur(left: Type, right: Type): Type = {
-      log.log(s"HEY THERE SUCKAS")
-      log.log(s"$left")
-      log.log(s"$right")
       if (!hasArgs(left) && !hasArgs(right)) {
         (left, right) match {
           case (MethodType(lP, lR), MethodType(rP, rR)) =>
@@ -330,7 +322,6 @@ class CheckerPhase(val global: Global) extends PluginComponent {
               right
             else if (isBasicDLType(left) && m.contains(right)) {
               val bRight = lubDL(m(right))
-              log.log(s":::::: $bRight $left ($right)")
               if (bRight.nonEmpty) {
                 log.infer(s"@ ${left.staticAnnotations}", s"@ ${bRight.get.staticAnnotations}")
                 val ann = getDLAnnotation(bRight.get)
@@ -364,7 +355,6 @@ class CheckerPhase(val global: Global) extends PluginComponent {
               recur(l, r)
           }
         val ref = TypeRef(left.prefix, right.typeSymbol, cases)
-        log.log(s" REF REF $ref\n$left\n$right\n${right.typeSymbol}\n$cases")
         ref
       }
       // Otherwise, fetch the appropriate base class for 'tpe' and recur.
@@ -391,7 +381,6 @@ class CheckerPhase(val global: Global) extends PluginComponent {
                            sparql1mode: Boolean = false): Type = {
 
     def doInfer(left: Type, right: DLEConcept): Type = {
-      log.log("Step: " + left + " " + right)
       val newT = typer.typed(Literal(Constant(right.pretty())))
       val newAnn = AnnotationInfo(typeOf[dl], List(newT), Nil)
 
@@ -408,9 +397,7 @@ class CheckerPhase(val global: Global) extends PluginComponent {
     if (sparql1mode) {
       left match {
         case TypeRef(p, s, arg) =>
-          log.log(s"p $p $s $arg")
           val newArg = doInfer(arg.head, right.head)
-          log.log(s"new $newArg")
           TypeRef(p, s, List(newArg))
         case _ =>
           log.report(pos, InternalError("Annotated SPARQL query type was wrong."))
@@ -517,7 +504,6 @@ class CheckerPhase(val global: Global) extends PluginComponent {
       // without annotations. This can only happen due to
       // some internal error.
       if (lhs.isEmpty || rhs.isEmpty) {
-        log.log(s" ------------------------------------+++++ \n ${lhs} :: ${rhs}")
         if (Globals.brokenIsError)
           Some(Left(InternalError(s"Broken DL type")))
         else
@@ -684,7 +670,6 @@ class CheckerPhase(val global: Global) extends PluginComponent {
         case DefDef(mods@Modifiers(f, n, ao), name, tpar, vparm, tpt, rhs) =>
           if (rhs != EmptyTree) { // or rhs.symbol != null?
             val inferred = inferDL(tpt.tpe, rhs.tpe)
-            log.log(s"::::: ${tpt.tpe} ${rhs.tpe} ${inferred}")
             updateSymbol(tree.symbol, inferred)
             checkType(tree.pos, tree.symbol.tpe.resultType, rhs.tpe)
           }
@@ -795,7 +780,6 @@ class CheckerPhase(val global: Global) extends PluginComponent {
 
         case Typed(expr, tpt) =>
           inferAndUpdate(tree, tpt.tpe)
-          log.log(s"--------------\n${tpt.tpe} ${expr.tpe}")
           checkType(tree.pos, tpt.tpe, expr.tpe)
           log.sig(s"(_ : ${expr.tpe}) : $tpt", tpe = tree.tpe.toString)
           log.done("Typed", "")
@@ -830,7 +814,6 @@ class CheckerPhase(val global: Global) extends PluginComponent {
           inferAndUpdate(tree, fun.tpe.resultType)
           fun.tpe.paramTypes.zip(args.map(_.tpe)).foreach {
             case (l , r) =>
-              log.log(s"checking $l $r")
               checkType(tree.pos, l, r)
           }
           log.sig(s" $obj . $name ( ", args.map(_.toString), " )", tree.tpe.toString)
@@ -852,8 +835,6 @@ class CheckerPhase(val global: Global) extends PluginComponent {
               else
                 args.map(_.tpe)
 
-            log.log(s"${fun.tpe}\n${fun.tpe.resultType}\n${tree.tpe}\n------\n")
-
             val newT = inferAndCheckMethodDL(
               tree.pos,
               allParams,
@@ -861,16 +842,6 @@ class CheckerPhase(val global: Global) extends PluginComponent {
               fun.tpe.resultType.resultType, // First removes only the tfun
               tree.tpe)
             tree.setType(newT)
-
-            log.log("multiple_lists?=" + (fun.tpe.paramLists.size > 1))
-            log.log(s"${o}, ${o.tpe}")
-            // In Scala: Parameter types are resolved left -> right (argument lists)
-            // Function cast fails, if parameter type is not specified or leftmost occurrence is defined
-            log.log(" paramLists " + fun.tpe.paramLists)
-            log.log(" paramLists tpe " + fun.tpe.paramLists.map(_.map(_.tpe)))
-            log.log(" ??? >>> " + tfun.args)
-            log.log("")
-            log.log(s"${tree.tpe}")
           }
           else {
             // Example:
@@ -912,8 +883,6 @@ class CheckerPhase(val global: Global) extends PluginComponent {
         case TypeApply(Select(Apply(Select(Apply(r1, List(Apply(_/*apply*/, queryParts))), r3), sparqlArgs), _/*instanceOf*/), List(sqt))
           if isSPARQLHelper(r1) && isSPARQLBuilder(r3) =>
 
-          log.log(s"sparql tpe = ${tree.tpe}")
-
           // The (substring) parts of the query.
           val temp = queryParts.map(_.toString.stripPrefix("\"").stripSuffix("\""))
           val parts = temp.head.dropWhile(_ != '|').tail :: temp.tail
@@ -922,12 +891,10 @@ class CheckerPhase(val global: Global) extends PluginComponent {
           val args =
             sparqlArgs.map { a =>
               val x = a.tpe
-              log.log(s"x??? $x")
 
               // Set to DL type or other type.
               if (isDLType(x)) {
                 val tpeDL = getDLType(x)
-                log.log(s"tpeDL?  $tpeDL -- $x")
                 if (tpeDL.isEmpty)
                   None
                 else
@@ -939,7 +906,6 @@ class CheckerPhase(val global: Global) extends PluginComponent {
 
           // If any DL type without annotation was found, report error.
           if (args.exists(_.isEmpty)) {
-            log.log(s"args $args")
             log.report(tree.pos, InternalError("Encountered undefined DL type in query argument."))
           }
           // Infer and set targets to query type.
@@ -958,8 +924,6 @@ class CheckerPhase(val global: Global) extends PluginComponent {
 
         case TypeApply(fun@(Select(q, n)), args) =>
           log.sig(s"$fun [", args.map(_.toString), "]", tree.tpe.toString)
-          log.log(s"fun $fun q $q n $n args $args")
-          log.log(s"${args.map(_.tpe)} ${args.map(_.symbol.tpe)}")
           log.done("TypedApply", fun.toString)
 
 
@@ -975,40 +939,7 @@ class CheckerPhase(val global: Global) extends PluginComponent {
           log.done("This", q.toString)
 
         case Select(q, name) =>
-
-          if (name.toString == "int" && isDLType(q.tpe))
-            log.log("THIS A int THING")
-
-          log.log(
-            s"""
-               |object: $q method: $name
-               |is method? ${tree.symbol.isMethod}
-               |is param/skolem? ${paramOrSkolem(tree.symbol.tpe.resultType)}
-               |tree - $tree
-               |  :  tpe - ${tree.tpe}
-               |tree symbol - ${tree.symbol}
-               |  :  tpe - ${tree.symbol.tpe}
-               |q - ${q}
-               |  :  tpe - ${q.tpe}
-               |q symbol - ${if (q.symbol != null) q.symbol}
-               |  :  tpe - ${if (q.symbol != null) q.symbol.tpe}
-             """.stripMargin)
-
           if (tree.symbol.isMethod) {
-            tree.symbol.tpe match {
-              case NullaryMethodType(t) =>
-                log.log(s"NULLARY $t")
-              case MethodType(params, result) =>
-                log.log(s"METHOD ( $params )-> $result")
-              case PolyType(tparams, result) =>
-                log.log(s"POLY [ $tparams ] -> $result")
-              case SingleType(pre, sym) =>
-                // This might be something like Main.this.<name>.type
-                log.log(s"SINGLE $pre $sym")
-              case t =>
-                log.log(s"TYPE $t")
-            }
-
             if (paramOrSkolem(tree.symbol.tpe.resultType) && q.symbol != null) {
 
               val temp = q.tpe.baseTypeSeq.toList.find(x => x.typeSymbol == tree.symbol.enclClass.tpe.typeSymbol)
@@ -1017,21 +948,8 @@ class CheckerPhase(val global: Global) extends PluginComponent {
               val left = tree.symbol.enclClass.tpe.typeArgs.map(_.typeSymbol)
               val right = aBaseT.typeArgs.map(_.typeSymbol)
 
-              log.log(
-                s""" SKOLEM/PARAM CASE
-                   |q tpe typeParams map (_.tpe): ${q.tpe.typeParams.map(_.tpe)}
-                   |q symbol tpe resultType typeARgs: ${q.symbol.tpe.resultType.typeArgs}
-                   |tree tpe: ${tree.tpe}
-                   |temp: $temp | q tpe: ${q.tpe}
-                   |aBseT: $aBaseT
-                   |left:  $left
-                   |right: $right
-                 """.stripMargin)
-
               if (left.nonEmpty && right.nonEmpty) {
                 val t = tree.symbol.tpe.resultType.substSym(left, right)
-
-                log.log(s"t ${t}")
 
                 val newResult = inferAndCheckMethodDL(
                   tree.pos,
@@ -1039,8 +957,6 @@ class CheckerPhase(val global: Global) extends PluginComponent {
                   q.symbol.tpe.resultType.typeArgs,
                   t,
                   tree.tpe.resultType)
-
-                log.log(s"updated with - $newResult")
 
                 val newT = tree.tpe match {
                   case MethodType(p, r) =>
@@ -1052,7 +968,6 @@ class CheckerPhase(val global: Global) extends PluginComponent {
               }
             }
             else {
-              log.log("  --- ELSE ---")
               inferAndUpdate(tree, tree.symbol.tpe)
             }
           }

@@ -1,7 +1,7 @@
 package de.uni_koblenz.dltypes
 package components
 
-import de.uni_koblenz.dltypes.backend.{TypeChecker, Extractor, Globals, TypeError}
+import de.uni_koblenz.dltypes.backend.{Extractor, Globals, TypeError}
 import de.uni_koblenz.dltypes.runtime.DLType
 import de.uni_koblenz.dltypes.tools._
 
@@ -12,6 +12,10 @@ import scala.tools.nsc.transform.Transform
 import scala.tools.nsc.transform.TypingTransformers
 
 
+// The 'dl-transform' phase.
+// Includes both the DL Parser (annotating DL types) and SPARQL Parser
+// (annotating and checking queries).
+// Handles the transformation of role projection (part of Syntax Transformations).
 class TransformerPhase(val global: Global)
   extends PluginComponent with Transform with TypingTransformers with TreeDSL {
   import global._
@@ -27,29 +31,10 @@ class TransformerPhase(val global: Global)
   class MyTransformer(unit: CompilationUnit) extends TypingTransformer(unit) with Extractor {
     val global: TransformerPhase.this.global.type = TransformerPhase.this.global
 
-    val parser = new Parser
-    val pp = new PrettyPrinter
-
+    // Fetch the global type checker.
     lazy val typeChecker = Globals.typeChecker
 
-    def parseDL(tpt: String, tree: Tree): DLEConcept = {
-      parser.parse(parser.dlexpr, Util.decode(tpt)) match {
-        case parser.Success(m, _) => m.asInstanceOf[DLEConcept]
-        case parser.NoSuccess(s, msg) =>
-          reporter.error(tree.pos, s"[DL] Can't parse DL type: $s")
-          Bottom
-      }
-    }
-
-    // Returns true, if the cases matches on type, which is also DL type.
-    def isDL(c: CaseDef): Boolean = {
-      c match {
-        case CaseDef(Bind(_, Typed(Ident(termNames.WILDCARD), DLType(_))), _, _) => true
-        case CaseDef(Typed(Ident(termNames.WILDCARD), DLType(_)), _, _) => true
-        case _ => false
-      }
-    }
-
+    // Test if SPARQL query is ASK query.
     def isAsk(pos: Position, s: List[String]): Boolean = {
       typeChecker.isAsk(s) match {
         case Left(errs) =>
@@ -59,24 +44,14 @@ class TransformerPhase(val global: Global)
       }
     }
 
-    // Returns true, if the list contains a simple query.
-    def isSimpleQuery(parts: List[String]): Boolean = // TODO: Not ideal, fails e.g. on new lines
-      """^\s*(?i)(PREFIX|SELECT|ASK|CONSTRUCT|DESCRIBE|BASE).*""".r
-        .findPrefixMatchOf(parts.head)
-        .isEmpty
-
-    // Wraps a query (separated in parts) in such a way, that the result is
-    // equivalent to the query: SELECT * WHERE { <q> }
-    def wrapSimpleQuery(parts: List[String]): List[String] = {
-      val t1 = ("SELECT * WHERE {" + parts.head) :: parts.tail
-      t1.init ++ List(t1.last + "}")
-    }
-
+    // Construct query from parts and handle some newline escaping.
     def makeFinalQuery(q: List[String]): List[String] = {
       val t = Globals.getPrefixes ++ q.head :: q.tail
       t.map(_.replaceAll("\\\\n", " ")).map(_.replaceAll("\\n", " "))
     }
 
+    // Add typing hint to the query. This is required, so that at runtime
+    // the arity of the query is known without parsing it again.
     def addTypeHint(q: List[String], opts: List[Boolean]): List[String] = {
       val encoded = opts.map {
         case true => "1"
@@ -88,10 +63,9 @@ class TransformerPhase(val global: Global)
         q
     }
 
-    val dlModuleName = "DLTypeDefs" + this.unit.source.file.name
-
     override def transform(tree: Tree): Tree = tree match {
 
+      // -- DL Parser --
       // Add @dl annotations to explicitly annotated DL types
       case DLType(n) =>
         val dl = DLE.parse(n) match {
@@ -106,6 +80,7 @@ class TransformerPhase(val global: Global)
         }
         tq"${typeOf[de.uni_koblenz.dltypes.runtime.DLType]} @dl(${dl.pretty()})"
 
+      // -- SPARQL / IRI Parser --
       // Match the application of StringContext(<iri>).iri, i.e. iri"" literals
       // with type annotations iri"" : `:Type`
       case Typed(orig @ Apply(Select(Apply(obj, List(i)), m), Nil), tpe)
@@ -125,11 +100,12 @@ class TransformerPhase(val global: Global)
           )
         }
 
+      // -- SPARQL / IRI Parser --
       // Match the application of StringContext(<iri>).iri, i.e. iri"" literals
       case orig @ Apply(Select(Apply(obj, List(i)), m), Nil)
           if m.toString == "iri" && obj.toString == "StringContext" =>
         if (Globals.doABoxReasoning) {
-          val dl: DLEConcept = Nominal(":" + i.toString.filter(_ != '"')) // TODO: Properly parse the iri!
+          val dl: DLEConcept = Nominal(":" + i.toString.filter(_ != '"'))
           atPos(tree.pos.makeTransparent)(
             q"$orig.asInstanceOf[${tq"${typeOf[de.uni_koblenz.dltypes.runtime.DLType]} @dl(${dl.pretty()})"}]"
           )
@@ -140,6 +116,7 @@ class TransformerPhase(val global: Global)
           )
         }
 
+      // -- SPARQL / IRI Parser --
       // Match the application of StringContext(<query>).sparql
       // (i.e., sparql"" literals).
       case orig @ Apply(Select(Apply(obj, query), m), r)
@@ -147,12 +124,7 @@ class TransformerPhase(val global: Global)
           && obj.toString == "StringContext" =>
 
         // Transform query tree to String.
-        val temp = query.map(_.toString().stripSuffix("\"").stripPrefix("\""))
-
-        // Test if this is a 'simple' query (i.e., needs to be wrapped in SELECT statement)
-        val strQuery =
-          if (isSimpleQuery(temp)) wrapSimpleQuery(temp)
-          else temp
+        val strQuery = query.map(_.toString().stripSuffix("\"").stripPrefix("\""))
 
         // Finalize formatting and add prefixes.
         val finalQ = makeFinalQuery(strQuery)
@@ -204,6 +176,7 @@ class TransformerPhase(val global: Global)
           }
         }
 
+      // -- Syntax Transformations --
       // Transform role projection to queries
       case Select(Ident(t), DLSelect(n)) =>
         // Generate the projection query.

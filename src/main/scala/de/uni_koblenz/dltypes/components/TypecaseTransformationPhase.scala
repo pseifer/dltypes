@@ -9,6 +9,8 @@ import scala.tools.nsc.plugins.PluginComponent
 import scala.tools.nsc.transform.{Transform, TypingTransformers}
 
 
+// The 'dl-typecase' phase.
+// Handles the transformations for runtime type checks (part of Syntax Transformations).
 class TypecaseTransformationPhase(val global: Global)
   extends PluginComponent with Transform with TypingTransformers with TreeDSL {
   import global._
@@ -20,7 +22,8 @@ class TypecaseTransformationPhase(val global: Global)
   override def newTransformer(unit: CompilationUnit): MyTransformer =
     new MyTransformer(unit)
 
-  // Provide DLEConcept and DLERole instances for the 'Liftable' type class.
+  // Provide DLEConcept and DLERole instances for the 'Liftable' type class,
+  // so they can be used in syntax quotes.
 
   private def recRoleLiftImpl(r: DLERole): Tree = {
     r match {
@@ -31,9 +34,8 @@ class TypecaseTransformationPhase(val global: Global)
       case Data(s) => q"_root_.de.uni_koblenz.dltypes.tools.Data($s)"
     }
   }
-
-  implicit val liftrole = Liftable[DLERole] { r =>
-    recRoleLiftImpl(r)
+  implicit val liftrole: global.Liftable[DLERole] = Liftable[DLERole] {
+    r => recRoleLiftImpl(r)
   }
 
   private def recDleLiftImpl(v: DLEConcept): Tree = {
@@ -63,24 +65,21 @@ class TypecaseTransformationPhase(val global: Global)
         q"_root_.de.uni_koblenz.dltypes.tools.Union($t1, $t2)"
     }
   }
-
-  implicit val liftdle = Liftable[DLEConcept] { v =>
-    recDleLiftImpl(v)
+  implicit val liftdle: global.Liftable[DLEConcept] = Liftable[DLEConcept] {
+    v => recDleLiftImpl(v)
   }
 
   class MyTransformer(unit: CompilationUnit) extends TypingTransformer(unit) with Extractor {
     val global: TypecaseTransformationPhase.this.global.type = TypecaseTransformationPhase.this.global
 
-    val parser = new Parser
-
-    def parseDL(tpt: String, tree: Tree): DLEConcept = {
-      parser.parse(parser.dlexpr, Util.decode(tpt)) match {
-        case parser.Success(m, _) => m.asInstanceOf[DLEConcept]
-        case parser.NoSuccess(s, msg) =>
-          reporter.error(tree.pos, s"[DL] Can't parse DL type: $s")
+    // Parse DL type.
+    def parseDL(tpt: String, tree: Tree): DLEConcept =
+      DLE.parse(tpt) match {
+        case Right(dle) => dle
+        case Left(err) =>
+          reporter.error(tree.pos, s"[DL] Can not parse DL type: $err")
           Bottom
       }
-    }
 
     /* Find cases where matching is done on DLType and add isSubsumed runtime checks.
     Rewrite:

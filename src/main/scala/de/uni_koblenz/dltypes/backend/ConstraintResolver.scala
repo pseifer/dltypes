@@ -78,15 +78,6 @@ class ConstraintResolver(val reasoner: Reasoner) {
     def get = Map(x -> Existential(r, t))
   }
 
-  // Basic constraint: Bilateral (DataProperty) roles between two variables.
-  //case class LiteralRole2Constraint(x1: Variable, x2: Variable, r: Data) extends CS {
-  //  def get =
-  //    if (x1 == x2) // Same variable.
-  //      Map(x1 -> Intersection(Existential(r, x1), Existential(Inverse(r), x1)))
-  //    else
-  //      Map(x1 -> Existential(r, x2), x2 -> Existential(Inverse(r), x1))
-  //}
-
   // Basic constraint: Role to nominal.
   case class RoleConstraint(x: Variable, r: Role, n: Nominal) extends CS {
     def get =
@@ -120,9 +111,6 @@ class ConstraintResolver(val reasoner: Reasoner) {
       qexprToCS(e1).flatMap(l => qexprToCS(e2).flatMap(r => Some(op(l, r))))
 
     qexpr match {
-      // TODO: ConceptAssertion(placeholder, ?y) (e.g. $w a ?y)  !!!
-      // TODO: More general Problem: ?x a ?y (?x <- ?y)
-      // Basically ConceptAssertion with two variables.
     case ConceptAssertion(Var(x), Iri(i)) => Some(ConceptConstraint(Variable(x), Concept(i)))
     case ConceptAssertion(Var(x), TypedValue(_, Iri(i))) => Some(LiteralConstraint(Variable(x), Type(i)))
     case RoleAssertion(Var(x), Iri(b), Iri(r)) => Some(RoleConstraint(Variable(x), Role(r), Nominal(b)))

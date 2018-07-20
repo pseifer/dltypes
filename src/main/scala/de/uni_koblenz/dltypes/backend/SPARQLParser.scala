@@ -34,18 +34,13 @@ class SPARQLParser {
       visitor.getQueryExpression.flatMap { qe =>
         visitor.getQType.flatMap {
           case Ask => Right(AskQuery(Nil, qe))
-          // TODO: vs returns a list of all variables. However, if SELECT * is used,
-          // this should be empty list instead. At some point, need to check if
-          // vs contains all the variables.
-          // Also contains vars in order of occurrence (for * cases) which is different
-          // from evaluator, which used alphabetical order.
           case Select => Right(SelectQuery(Nil, vs, qe))
         }
       }
     }
   }
 
-  class ParseVisitor extends AbstractQueryModelVisitor[Exception] { // TODO: Exception
+  class ParseVisitor extends AbstractQueryModelVisitor[Exception] {
     import org.openrdf.query.algebra.{Join, Union, Var => OVar, StatementPattern}
     import scala.collection.mutable.Stack
 

@@ -5,8 +5,6 @@ import org.scalatest._
 class SPARQLParserTest extends FlatSpec {
   // Test data
 
-  // TODO: Finish tests (results missing)
-
   val prefixSPARQL1 = "PREFIX : <someiri>"
   val prefixCode1 = Prefix(Pre(":"), Iri("someiri"))
   val prefixSPARQL2 = "PREFIX uni: <http://www.w3.org/TR/2003/PR-owl-guide-20031209/wine#>"
