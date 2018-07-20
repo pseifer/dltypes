@@ -209,6 +209,6 @@ class TypeChecker {
     case CheckCovariant(lhs, rhs) => doTypeCheck(lhs, rhs, Subsumed)
     case CheckContravariant(lhs, rhs) => doTypeCheck(rhs, lhs, Subsumed)
     case CheckInvariant(lhs, rhs) => doTypeCheck(lhs, rhs, ConceptEquality)
-    case CheckEquality(lhs, rhs) => doEqCheck(lhs, rhs) // TODO: Is this used?
+    case CheckEquality(lhs, rhs) => doEqCheck(lhs, rhs)
   }
 }

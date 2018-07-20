@@ -1100,6 +1100,14 @@ def m(x: `:Wine`): `#t` = x
 def m(x: `:RedWine | :WhiteWine`): `#t` = x
 ```
 
+#### Equality
+```scala
+val rw: `:Wine` = iri"PageMillWineryCabernetSauvignon"
+val ww:`:Wine`  = iri"PeterMccoyChardonnay"
+val x = rw == ww
+```
+
+
 ## Warning
 #### Concept is not defined
 ```scala
@@ -1108,7 +1116,14 @@ def m(x: `:What`): `#t` = x
 
 #### Expression is not satisfiable
 ```scala
-def m(x: `:RedWine & :WhiteWine`): `#t` = x
+def m(x: `:RedWine & :WhiteWine`): `:RedWine & :WhiteWine` = x
+```
+
+#### Equality
+```scala
+val rw: `:RedWine` = iri"PageMillWineryCabernetSauvignon"
+val ww: `:WhiteWine` = iri"PeterMccoyChardonnay"
+val x = rw == ww
 ```
 
 

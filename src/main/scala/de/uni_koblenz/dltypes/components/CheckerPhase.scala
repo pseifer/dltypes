@@ -162,6 +162,35 @@ class CheckerPhase(val global: Global) extends PluginComponent {
       case _ => false
     }
 
+  // Test if tree is equality on DL types.
+  def isDLEquality(tpe: Type, tree: Tree): Boolean =
+    tpe == typeOf[Boolean] && {
+      tree match {
+        case Apply(Select(l, eqeq), List(r)) => {
+          if (eqeq.decodedName.toString == "=="
+            && isDLType(l.symbol.tpe.resultType)
+            && isDLType(r.tpe)) true else false}
+        case _ => false
+      }
+    }
+
+  def warnEquality(tree: Tree): Unit = {
+    tree match {
+      case Apply(Select(l, _), List(r)) =>
+        val lhs = getDLType(l.symbol.tpe.resultType)
+        val rhs = getDLType(r.tpe.resultType)
+        val res = typeChecker.check(CheckEquality(lhs.get, rhs.get))
+        res match {
+          case Result(test, warn) =>
+            log.echo(test)
+            if (warn.nonEmpty)
+              log.report(tree.pos, warn.get)
+          case OtherFailure(e) => log.report(tree.pos, e)
+          case EmptyResult => Unit
+        }
+    }
+  }
+
   // Get the DLEConcept pertaining to the @dl annotation (if present).
   // If this fails, the type did not have an annotation. If parsing
   // the type fails this is detected earlier (unless the parser is broken).
@@ -620,7 +649,8 @@ class CheckerPhase(val global: Global) extends PluginComponent {
 
       super.traverse(tree) // Traverse tree depth first.
 
-      val t = System.currentTimeMillis()
+      // If tree is equality check on DL types, emit Warning.
+      if (isDLEquality(tree.tpe, tree)) warnEquality(tree)
 
       tree match {
         case EmptyTree => Unit

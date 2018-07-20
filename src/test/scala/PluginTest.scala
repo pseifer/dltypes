@@ -7,7 +7,7 @@ class PluginTest extends FreeSpec {
 
   // Run all tests in "Tests.md".
   parse("Tests.md")
-    //.filterCategory("If")
+    //.filterCategory("Defined and Satisfiable")
     .onlyFor(Success, { (name, test) =>
       name in success(testCase(test))
     })
