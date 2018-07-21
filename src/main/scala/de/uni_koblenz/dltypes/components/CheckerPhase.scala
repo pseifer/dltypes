@@ -21,8 +21,8 @@ class CheckerPhase(val global: Global) extends PluginComponent {
   override val runsAfter: List[String] = "typer" :: Nil
   override val runsRightAfter = Some("typer")
 
-  def newPhase(prev: Phase) = new StdPhase(prev) {
-    override def name = phaseName
+  def newPhase(prev: Phase): Phase = new StdPhase(prev) {
+    override def name: String = phaseName
 
     override def apply(unit: CompilationUnit): Unit = {
       currentRun.units foreach { unit =>
@@ -31,7 +31,7 @@ class CheckerPhase(val global: Global) extends PluginComponent {
     }
   }
 
-  lazy val typeChecker = Globals.typeChecker
+  lazy val typeChecker: TypeChecker = Globals.typeChecker
 
   val log = new Logger(global, List())
 
@@ -169,10 +169,12 @@ class CheckerPhase(val global: Global) extends PluginComponent {
   def isDLEquality(tpe: Type, tree: Tree): Boolean =
     tpe == typeOf[Boolean] && {
       tree match {
-        case Apply(Select(l, eqeq), List(r)) => {
-          if (eqeq.decodedName.toString == "=="
+        case Apply(Select(l, eqeq), List(r)) =>
+          if ((eqeq.decodedName.toString == "=="
+             || eqeq.decodedName.toString == "sameAs")
             && isDLType(l.symbol.tpe.resultType)
-            && isDLType(r.tpe)) true else false}
+            && isDLType(r.tpe)) true
+          else false
         case _ => false
       }
     }
@@ -252,7 +254,7 @@ class CheckerPhase(val global: Global) extends PluginComponent {
   // Get the least upper bound of all @dl annotated types in 'types'.
   // Returns None if any are not annotated DL types.
   private def lubDL(types: List[Type]): Option[Type] = {
-    val parsed = types.flatMap { case t: Type => getDLType(t) }
+    val parsed = types.flatMap(getDLType)
 
     if (parsed.nonEmpty) {
       val tpe = Globals.typeChecker.lub(parsed)
@@ -317,7 +319,7 @@ class CheckerPhase(val global: Global) extends PluginComponent {
           case (MethodType(lP, lR), MethodType(rP, rR)) =>
             val newP = lP.zip(rP).map { case (l, r) => l.updateInfo(recur(l.tpe, r.tpe)) }
             MethodType(newP, recur(lR, rR))
-          case _ => {
+          case _ =>
             if (!right.typeSymbol.isTypeParameterOrSkolem)
               right
             else if (isBasicDLType(left) && m.contains(right)) {
@@ -343,7 +345,6 @@ class CheckerPhase(val global: Global) extends PluginComponent {
             }
             else
               left
-          }
         }
       }
       // If both are the same class, recur on all arguments.
@@ -438,7 +439,7 @@ class CheckerPhase(val global: Global) extends PluginComponent {
   }
 
   private def dropResultType(target: Type, tpe: Type): Type = {
-    if (target.paramLists.size < tpe.paramLists.size)
+    if (target.paramLists.lengthCompare(tpe.paramLists.size) < 0)
       dropResultType(target, tpe.resultType)
     else
       tpe
@@ -822,7 +823,7 @@ class CheckerPhase(val global: Global) extends PluginComponent {
         // Method call with type parameters on object 'obj'
         case Apply(tfun@TypeApply(fun@Select(o, m), targs), args) =>
 
-          if (fun.tpe.paramLists.size > 1) {
+          if (fun.tpe.paramLists.lengthCompare(1) > 0) {
             val allParams = fun.tpe.paramLists.flatten.map(_.tpe)
 
             val argSize = args.size

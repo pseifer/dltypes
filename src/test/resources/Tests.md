@@ -1107,6 +1107,13 @@ val ww:`:Wine`  = iri"PeterMccoyChardonnay"
 val x = rw == ww
 ```
 
+#### SameAs
+```scala
+val rw: `:Wine` = iri"PageMillWineryCabernetSauvignon"
+val ww:`:Wine`  = iri"PeterMccoyChardonnay"
+val x = rw sameAs ww
+```
+
 
 ## Warning
 #### Concept is not defined
@@ -1124,6 +1131,13 @@ def m(x: `:RedWine & :WhiteWine`): `:RedWine & :WhiteWine` = x
 val rw: `:RedWine` = iri"PageMillWineryCabernetSauvignon"
 val ww: `:WhiteWine` = iri"PeterMccoyChardonnay"
 val x = rw == ww
+```
+
+#### SameAs
+```scala
+val rw: `:RedWine` = iri"PageMillWineryCabernetSauvignon"
+val ww: `:WhiteWine` = iri"PeterMccoyChardonnay"
+val x = rw sameAs ww
 ```
 
 
