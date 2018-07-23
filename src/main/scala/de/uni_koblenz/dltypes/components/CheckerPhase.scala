@@ -254,7 +254,7 @@ class CheckerPhase(val global: Global) extends PluginComponent {
   // Get the least upper bound of all @dl annotated types in 'types'.
   // Returns None if any are not annotated DL types.
   private def lubDL(types: List[Type]): Option[Type] = {
-    val parsed = types.flatMap(getDLType)
+    val parsed = types.flatMap { t: Type => getDLType(t) }
 
     if (parsed.nonEmpty) {
       val tpe = Globals.typeChecker.lub(parsed)
