@@ -201,7 +201,7 @@ class TestTools(val loglvl: Int = 0, val debug: Boolean = false) {
     val code =
       List("import de.uni_koblenz.dltypes.runtime._",
         "import de.uni_koblenz.dltypes.runtime.Sparql._",
-        "class Main extends App {",
+        "object Main extends App {",
         test,
         "}")
     mkTestNormal(code.mkString("\n"))
