@@ -1,4 +1,4 @@
-# ScaSpa -- Typesafe Integration of SPARQL into Scala
+# ScaSpa -- Type-Safe Integration of SPARQL into Scala
 This is the main repository of the ScaSpa compiler plugin. The runtime library can
 be found over at [```dltypes-lib```](https://github.com/pseifer/dltypes-lib). A minimal example demonstrating setup 
 and usage of the plugin can be found in the [```dltypes-example```](https://github.com/pseifer/dltypes-example) repository.
@@ -18,7 +18,8 @@ JAR should be provided directly, see also the [```dltypes-example```](https://gi
 The following is a minimal sbt configuration file required to use the plugin. In order to use
 the plugin, it has to be added to the compiler (1). Via the ```-P:dltypes``` flag, arguments
 can be forwarded to the plugin. ScaSpa requires an ontology (2). This may either be a local
-file or an URI. Additionally, the default prefix can be explicitly defined (3). It may be omitted,
+file or an URI. Additionally, the default prefix can be explicitly defined (3) (e.g., when loading
+the ontology from a local file). It may be omitted,
 in which case it is set to the ontology.
 
 ```sbt
@@ -26,9 +27,11 @@ name := "cool app name"
 version := "the version"
 scalaVersion := "2.12.4"
 
+// The ScaSpa runtime library.
 libraryDependencies += "de.uni_koblenz" %% "dltypes-lib" % "0.0.1-SNAPSHOT"
-libraryDependencies += "com.complexible.stardog" % "client-http" % "5.2.1"
 
+// The Stardog HTTP client library is required as well.
+libraryDependencies += "com.complexible.stardog" % "client-http" % "5.2.1"
 
 scalacOptions += "-P:dltypes:ontology:http://swat.cse.lehigh.edu/onto/univ-bench.owl"
 
@@ -39,5 +42,3 @@ scalacOptions += "-P:dltypes:ontology:http://swat.cse.lehigh.edu/onto/univ-bench
 // (3) Prefix (may sometimes be omitted).
 // scalacOptions += "-P:dltypes:prefix:http://swat.cse.lehigh.edu/onto/univ-bench.owl#"
 ```
-
-## 
